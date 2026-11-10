@@ -1,0 +1,58 @@
+[hidden]{display:none!important}
+.issue-input-wrap{position:relative;min-width:0;width:100%}
+.issue-input-wrap>input{padding-right:34px!important}
+.issue-input-clear,.settings-product .issue-input-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:18px;height:18px;min-height:0;padding:0;border:0;border-radius:50%;background:#edf1f6;color:#738197;line-height:1}
+.issue-input-clear:hover{background:#dfe6f0;color:#34455b}
+.issue-input-clear svg{position:static;left:auto;top:auto;width:14px;height:14px;stroke-width:1.6}
+/* The input wrapper must not paint over the existing left search affordance. */
+.search-field>svg{z-index:1;pointer-events:none}
+.settings-scroll{overflow:auto;display:grid;gap:16px;align-content:start;padding-bottom:24px}
+.settings-scroll .config-panel{border:1px solid #dfe7f2;border-radius:10px;background:white}
+.settings-scroll .panel-head{min-height:56px;padding:12px 20px;border-bottom:1px solid #e9eef5;display:flex;align-items:center;justify-content:space-between}
+.settings-scroll .panel-body{padding:20px}.settings-scroll .field{display:grid;gap:8px;margin-bottom:16px;max-width:580px}.settings-scroll label{font-weight:600}
+.settings-scroll input,.settings-scroll select{height:36px;border:1px solid #d4deec;border-radius:6px;padding:0 10px;background:#fff}
+.settings-scroll .actions{display:flex;gap:8px;align-items:center;margin-top:16px}
+.settings-scroll button{padding:8px 14px;min-height:36px}
+.settings-scroll h2{font-size:16px}
+.settings-scroll .facts{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:20px}
+.settings-scroll dt{font-size:12px;color:#57677b;margin-bottom:7px}.settings-scroll dd{margin:0;font-size:14px}
+.settings-scroll .month-block{border-top:1px solid #dfe7f2;padding:16px 20px}
+.settings-scroll .month-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.settings-scroll .notice{margin-top:12px;background:#f3f6fa;border-radius:6px;padding:10px 12px;line-height:20px}
+.status-good{color:#2b6853}.status-warning{color:#89501b}
+.result-history{cursor:pointer}
+.record-actions button{padding:0 4px}.record-meta{overflow:hidden}
+/* Reassign 120px of the former action spacer to the description, retaining room for all three actions. */
+@media(min-width:1101px){.record,.record.checked,.record.duplicate{grid-template-columns:minmax(0,1fr) 55px 63px minmax(110px,calc(1.15 * (100% - 166px) / 2.15 - 120px))}}
+@media(max-width:1100px){.record,.record.checked,.record.duplicate{grid-template-columns:minmax(0,1fr) 36px 46px 88px}}
+.record-body{min-width:0}
+.record-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+.recovery-notice{cursor:pointer}
+.date-popover,.hours-popover{position:fixed;background:#fff;border:1px solid #d4deec;border-radius:8px;box-shadow:0 6px 25px #20304422;padding:12px;z-index:12;margin:0}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,34px);gap:3px;margin-top:8px}
+.calendar-grid button{height:31px;border:0}.calendar-grid button.current{background:#1762ed;color:white}
+.date-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.date-head button{width:30px;height:28px}
+.hours-popover{display:flex;gap:6px}.hours-popover button{padding:6px 10px}
+.inline-error{font-size:12px;color:#854900;margin-top:5px}
+.badge{font-size:12px;border-radius:12px;background:#e9f4ed;color:#246248;padding:3px 9px}
+/* The approved drawer stylesheet owns spacing and hierarchy; product states only add actionable failure tones. */
+#submissionView .submission-rows{padding:0;min-height:0}
+#submissionView .submission-row p{margin:0}
+#submissionView .submission-row:is([data-state=failed],[data-state=uncertain],[data-state=duplicate]) :is(.result-line-status,.result-note){color:#854900}
+#submissionView .result-header h2{font-size:18px}
+#submissionView .result-outcome{justify-content:flex-start}
+#submissionView .result-history{cursor:pointer}
+
+#previewBody{white-space:pre-wrap;margin:0;line-height:24px}
+.batch-input{width:100%;height:36px;border:1px solid #d4deec;border-radius:6px;padding:7px;font:inherit}
+.issue-results{display:grid;gap:3px;position:absolute;top:calc(100% + 4px);left:0;z-index:10;background:white;box-shadow:0 4px 12px #20304422;border:1px solid #dfe7f2;padding:5px;max-height:180px;overflow:auto;min-width:260px}.issue-results button{padding:8px;text-align:left}
+.history-details{padding:12px 20px;background:#f5f8fc;font-size:13px}
+.keyword input{text-align:left;font-weight:400}
+.edit-table .date-group td{height:36px;padding:8px 20px;background:#eff3f8;border:0;color:#34455b;font-size:12px}
+.edit-table .date-group td strong{font-size:14px;font-weight:650;color:#202e42}
+.edit-table td{vertical-align:top;padding-top:15px;padding-bottom:15px}
+.edit-table tr:not(.date-group)>td:first-child{vertical-align:middle}
+.edit-table [data-task]{display:flex;align-items:center;height:36px;white-space:nowrap;background:#f8fafd;border:1px solid #d4deec;border-radius:6px;padding:0 8px;font-size:13px}
+
+/* File icon reserves the first grid column so the title and subtitle share the wider text column. */
+.week-file strong{min-width:0;overflow-wrap:anywhere}

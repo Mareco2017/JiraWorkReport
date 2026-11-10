@@ -1,0 +1,10 @@
+Generator: built-in image_gen
+Background: white, opaque
+
+Use case: logo-brand. Asset type: a single finished square desktop app icon for a JIRA time-entry workbench.
+Primary request: a typography-led product logo using only the exact uppercase word "JIRA", on a pure white opaque background. The user explicitly rejects abstract pictorial logos and blue.
+Text (verbatim): "JIRA" — exactly four uppercase Latin letters, J I R A.
+Design: sophisticated, bold, compact custom geometric sans-serif lettering. Strong solid letterforms, gently softened corners, carefully optically adjusted kerning and a distinctive but highly legible R and A. Render JIRA as ONE horizontal word centered in the square, occupying approximately 73% of the canvas width. The word should have substantial visual weight and a balanced cap height around 29–33% of the canvas height, with generous white space above and below. Precise baselines, coherent stroke weights, excellent optical centering. Think of a refined, confident productivity software wordmark rather than generic typeset text.
+Color: the letters are a single flat warm charcoal, approximately #303136; clearly near-black dark gray, NOT pure black. Background #FFFFFF.
+Style: clean, minimal, premium flat vector-like typography with crisp edges. Quiet, purposeful and timeless.
+Constraints: wordmark only; no blue anywhere, no pure black, no symbols or pictograms, no clock, no document, no checkmark, no extra letters, no tagline, no border, no containing badge, no gradient, no texture, no shadow, no embossing, no 3D, no mockup, no multiple options. Do not reproduce the Atlassian corporate logo; create a fresh typographic treatment of the requested word. Deliver just one high-resolution square icon artwork.

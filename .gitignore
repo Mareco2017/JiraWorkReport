@@ -1,0 +1,22 @@
+# 本地依赖和打包产物由安装、构建命令生成。
+node_modules/
+dist/
+
+# 系统文件与运行日志。
+.DS_Store
+Thumbs.db
+*.log
+
+# 本机连接信息和运行数据不进入版本库。
+.env
+.env.*
+!.env.example
+/userData/
+/workspaces/
+/settings.json
+/secrets.json
+/app/site-defaults.local.json
+/credentials/
+
+# 原始需求、真实联调记录与截图仅供本机查阅；公开说明见 docs/README.md。
+/docs/issue/

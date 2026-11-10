@@ -1,0 +1,66 @@
+.settings-product:has(#jiraHost){min-height:0;--field:#d4deec;--text:#34455b;--muted:#57677b;--ink:#202e42;--border:#dfe7f2;font-size:13px}
+.settings-product .settings-scroll{overflow:auto;min-height:0;display:grid;gap:16px;align-content:start;padding-bottom:4px}
+.settings-product .setting-panel{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.settings-product #jiraHost{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff}
+.settings-product #jiraHost .setting-panel{border:0;border-radius:0}
+.settings-product .setting-head,.settings-product .setting-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 20px;min-height:56px}
+.settings-product .setting-head{border-bottom:1px solid #e9eef5}
+.settings-product .setting-foot{border-top:1px solid #e9eef5;justify-content:flex-end;min-height:60px}
+.settings-product .setting-head h2{font-size:16px;line-height:24px;margin:0}
+.settings-product .setting-heading,.settings-product .setting-actions{display:flex;gap:8px;align-items:center}
+.settings-product .setting-heading{gap:12px}
+.settings-product .setting-body{padding:20px}
+.settings-product .setting-facts{display:grid;grid-template-columns:minmax(220px,1.5fr) minmax(135px,1fr) minmax(130px,.9fr);gap:12px 22px;margin:0}
+.settings-product .setting-facts>div{display:grid;gap:6px;min-width:0}
+.settings-product .setting-facts dt{font-size:12px;color:var(--muted)}
+.settings-product .setting-facts dd{margin:0;overflow-wrap:anywhere;font-size:14px;color:var(--ink)}
+.settings-product .setting-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:12px;font-size:12px;line-height:16px;color:#536378;background:#eff2f6}
+.settings-product .setting-badge::before{content:'';height:6px;width:6px;border-radius:50%;background:currentColor}
+.settings-product .setting-badge.ready{color:#246248;background:#e9f4ed}
+.settings-product .setting-button{min-height:36px;padding:6px 14px;font-size:13px;border:1px solid #ccd7e5;background:#fff;color:var(--text);border-radius:6px;font-weight:550;white-space:nowrap}
+.settings-product .setting-button.setting-primary{border-color:var(--blue);background:var(--blue);color:#fff;font-weight:600}
+.settings-product .setting-button.setting-primary:disabled{background:#aab9ce;border-color:#aab9ce}
+.settings-product .setting-link{padding:4px 0;border:0;background:transparent;color:#2057ac;font-size:13px;white-space:nowrap}
+.settings-product .setting-form,.settings-product .setting-agent-form{display:grid;gap:18px;max-width:590px}
+.settings-product .setting-form{max-width:490px}
+.settings-product .setting-field{display:grid;gap:7px;font-size:13px;font-weight:600;color:#33445a;min-width:0}
+.settings-product .setting-control{width:100%;height:36px;border:1px solid var(--field);border-radius:6px;padding:0 11px;background:#fff;color:var(--ink);font-size:14px;font-weight:400;min-width:0}
+.settings-product .setting-control::placeholder{color:#758398;font-size:13px}
+.settings-product .setting-notice{display:block;background:#f1f5fa;color:var(--text);padding:10px 12px;border-radius:6px;font-size:13px;line-height:20px;max-width:590px;margin-top:12px}
+.settings-product .setting-notice.error{background:#fff6e9;color:#824900}
+.settings-product .setting-notice.success{background:#edf5ef;color:#256047}
+.settings-product .setting-help{font-size:13px;line-height:20px;color:var(--muted);margin:0}
+.settings-product .setting-month{border-top:1px solid var(--border);padding:16px 20px 18px}
+.settings-product .setting-month-head,.settings-product .setting-month-controls,.settings-product .setting-month-row,.settings-product .setting-month-description,.settings-product .setting-path,.settings-product .setting-service-select{display:flex;align-items:center;gap:8px}
+.settings-product .setting-month-head,.settings-product .setting-month-row{justify-content:space-between}
+.settings-product .setting-month-head{margin-bottom:12px}
+.settings-product .setting-month-head h3{margin:0;font-size:14px;line-height:22px}
+.settings-product .setting-month-controls select{height:32px;border:1px solid var(--field);border-radius:6px;background:#fff;padding:0 6px}
+.settings-product .setting-month-description{flex-wrap:wrap;gap:6px 10px;min-width:0}
+.settings-product .setting-month-key{font-size:13px;color:var(--muted)}
+.settings-product .setting-month-description strong{font-size:14px;font-weight:550}
+.settings-product .setting-source{font-size:12px;color:#57677b;background:#f0f4f8;border-radius:4px;padding:2px 6px}
+.settings-product .setting-month-editor{max-width:600px;display:grid;gap:8px}
+.settings-product .setting-month-query{display:grid;grid-template-columns:minmax(0,1fr)}
+.settings-product .setting-month-editor .setting-help:empty{display:none}
+.settings-product .setting-month-actions{justify-content:flex-end;margin-top:4px}
+.settings-product .setting-month-results{display:grid;max-height:152px;overflow:auto;border:1px solid var(--border);border-radius:6px}
+.settings-product .setting-month-results:empty{display:none}
+.settings-product .setting-month-option{border:0;background:#fff;text-align:left;min-height:34px;padding:5px 10px;font-size:13px}
+.settings-product .setting-month-option:hover,.settings-product .setting-month-option.selected{background:#edf4ff;color:#1d55ad}
+.settings-product .setting-agent-form fieldset{border:0;padding:0;margin:0;min-width:0}
+.settings-product .setting-agent-form legend{font-size:13px;font-weight:600;margin-bottom:9px}
+.settings-product .setting-engine-options,.settings-product .setting-model-options{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.settings-product .setting-engine-options{gap:8px}
+.settings-product .setting-engine-options label,.settings-product .setting-model-options label{font-weight:400;display:inline-flex;gap:8px;align-items:center;font-size:13px;line-height:20px;cursor:pointer}
+.settings-product .setting-engine-options label{padding:7px 14px 7px 12px;border:1px solid var(--field);border-radius:6px;min-height:36px;font-weight:550}
+.settings-product .setting-engine-options label:has(:checked){color:#174d9e;background:#f0f5ff;border-color:#8baef1}
+.settings-product input[type=radio]{margin:0;width:15px;height:15px;accent-color:var(--blue)}
+.settings-product .setting-model-service{border-left:2px solid #d9e5f9;padding-left:14px;margin-top:14px;display:grid;gap:13px}
+.settings-product .setting-custom-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.settings-product .setting-custom-grid>.setting-field:first-child{grid-column:1/-1}
+.settings-product .setting-agent .setting-foot{justify-content:space-between}
+.settings-product [hidden]{display:none!important}
+@media(max-width:1100px){.settings-product .setting-head,.settings-product .setting-foot{padding-left:16px;padding-right:16px}.settings-product .setting-body{padding:20px 16px}.settings-product .setting-month{padding-left:16px;padding-right:16px}.settings-product .setting-facts{grid-template-columns:minmax(180px,1.3fr) minmax(95px,1fr) minmax(110px,.9fr)}}
+
+.settings-product .setting-runtime-status{display:flex;align-items:center;gap:14px;color:var(--muted);font-size:13px;margin-top:-8px}

@@ -1,0 +1,27 @@
+.agent-panel [hidden]{display:none!important}
+.agent-panel .panel-head{gap:14px}
+.agent-panel .connection-facts{grid-template-columns:minmax(200px,1.5fr) minmax(180px,1fr) minmax(140px,.9fr)}
+.agent-editor fieldset{border:0;padding:0;margin:0;min-width:0}
+.agent-editor legend{font-size:13px;font-weight:600;color:var(--ink);padding:0;margin-bottom:9px}
+.agent-fields{display:grid;gap:18px;max-width:530px}
+.agent-engines,.agent-models{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.agent-engines label,.agent-models label{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;line-height:20px}
+.agent-engines label{padding:7px 14px 7px 12px;min-height:36px;border:1px solid var(--field);border-radius:6px;color:var(--text);font-weight:550}
+.agent-engines label:has(:checked){color:#174d9e;background:#f0f5ff;border-color:#8baef1}
+.agent-models{gap:20px}
+.agent-editor input[type=radio]{width:15px;height:15px;margin:0;accent-color:var(--blue)}
+.agent-model-field{margin-top:12px}
+.agent-result .text-btn{margin-left:10px}
+.agent-panel [aria-invalid=true]{border-color:#bc812f}
+.agent-fields .field-help{font-size:13px}
+@media(max-width:760px){.agent-panel .connection-facts{grid-template-columns:1fr 1fr}}
+.agent-fields{max-width:590px}
+.agent-model-field{border-left:2px solid #d9e5f9;padding-left:14px;margin-top:14px}
+.agent-custom-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.agent-service-field{grid-column:1/-1}
+.agent-service-picker{display:grid;gap:7px;margin:0 0 13px}
+.agent-service-picker>div{display:flex;gap:12px;align-items:center}
+.agent-service-picker .text-btn{white-space:nowrap}
+.agent-service-picker select{min-width:0}
+.agent-custom-fields input[readonly]{background:#f8fafd}
+@media(max-width:800px){.agent-custom-fields{grid-template-columns:1fr}}

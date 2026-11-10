@@ -1,0 +1,66 @@
+.sidebar a{text-decoration:none}
+.log-panel{display:flex;flex-direction:column;flex:1;min-height:0}
+.filter-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px 24px;padding:16px var(--panel-pad);border-bottom:1px solid #e6ebf2}
+.period-picker{position:relative}
+#periodBar{display:flex;align-items:center;padding:3px;gap:2px;background:#f0f3f8;border-radius:7px}
+#periodBar button{display:flex;align-items:center;gap:4px;height:30px;padding:0 12px;border:1px solid transparent;background:transparent;font-size:13px;color:var(--muted)}
+#periodBar button[aria-pressed=true],#periodBar button.active{background:white;color:#1759bb;border-color:#d7e2f2;box-shadow:0 1px 3px #29354610;font-weight:600}
+#periodBar svg{width:12px;height:12px}
+.search-controls{display:flex;align-items:center;gap:8px}
+.keyword{display:flex;align-items:center;gap:8px;height:36px;border:1px solid var(--field);border-radius:6px;padding:0 10px;color:var(--muted)}
+.keyword input{border:0;background:transparent;height:100%;width:160px;outline:0;color:var(--ink)}
+.keyword:focus-within{border-color:#5891ef}
+.keyword input::placeholder{color:var(--muted)}
+#resultStatus{height:36px;padding:0 10px;border:1px solid var(--field);border-radius:6px;background:white}
+#rangePopover{position:absolute;top:calc(100% + 8px);left:0;z-index:4;width:280px;background:white;padding:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 24px #25355120}
+#rangePopover label{display:grid;grid-template-columns:65px 1fr;align-items:center;gap:8px;margin-bottom:12px}
+#rangePopover input{height:34px;padding:0 8px;border:1px solid var(--field);border-radius:5px}
+#rangeError{color:var(--warning);margin:0;font-size:12px}
+#applyRange{display:block;margin:8px 0 0 auto;padding:6px 16px}
+.range-heading{min-height:52px;display:flex;align-items:center;gap:12px;padding:0 var(--panel-pad)}
+#recordCount{margin:0;color:var(--muted);font-size:12px}
+.list-scroll{overflow:auto;min-height:0;flex:1}
+.list-columns,.record-row{display:grid;grid-template-columns:minmax(235px,1fr) 76px 62px minmax(106px,0.3fr) 74px;align-items:center;gap:12px;padding:0 var(--panel-pad)}
+.list-columns{position:sticky;top:0;z-index:1;background:#f8fafc;min-width:660px;min-height:36px;color:var(--muted);font-size:12px}
+#recordList:has(.record-row){min-width:660px}
+.day-heading{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:8px var(--panel-pad);min-height:38px;background:#eff3f8}
+.day-label{font-size:14px;font-weight:650}.day-stat{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.record-row{min-height:68px;padding-top:12px;padding-bottom:12px;border-bottom:1px solid #edf1f6}
+.item-title{font-weight:600;font-size:14px;line-height:20px;overflow-wrap:anywhere}
+.item-meta,.source{color:var(--muted);font-size:12px;line-height:18px}
+.item-meta{margin-top:4px}.hours{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.status{font-size:13px}.action button,.record-action{background:transparent;border:0;color:#245bb4;font-weight:550;padding:6px 0}
+#detailDialog{width:min(420px,90vw);border:1px solid var(--border);border-radius:10px;color:var(--ink);padding:20px}
+#detailDialog::backdrop{background:#1b2d4938}#detailDialog header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}#detailClose{width:32px;height:32px;font-size:20px;border:0}#detailContent{line-height:1.7}
+.day-label span{margin-left:8px;color:var(--muted);font-size:12px;font-weight:400}
+.day-stat{display:flex;align-items:center;gap:12px}.day-stat .registered{color:#34465d;font-weight:550}.failed-stat,.failure-reason{color:var(--warning)}
+.record-row{padding-top:15px;padding-bottom:15px}
+.status-label{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+.status-label::before{content:"";width:6px;height:6px;background:currentColor;border-radius:50%}
+.status-label.success{color:#326658}.status-label.failed{color:#8a4a12}.status-label.pending{color:#325eae}
+.failure-reason{margin:4px 0 0;font-size:12px;line-height:18px}
+.record-detail{margin:0}.record-detail>div{display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;padding:7px 0}.record-detail dt{color:var(--muted)}.record-detail dd{margin:0;overflow-wrap:anywhere}
+.empty-state{padding:56px 16px;text-align:center;color:var(--muted)}.empty-state button{padding:6px 14px;color:#245bb4}
+.item-meta span+span::before{content:" · ";color:#758397;margin:0 4px}
+.empty-state{display:grid;justify-items:center;gap:12px}
+.record-main{min-width:0}
+.item-meta{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+/* Reserve space for edit, view and delete without pushing the status column into the actions. */
+.list-columns,.record-row{grid-template-columns:minmax(180px,1fr) 76px 62px 80px 176px}
+.record-row .action{display:flex;justify-content:flex-end;gap:16px;white-space:nowrap}
+.record-row .action .delete-record{color:#a84949}
+.record-row .action button:disabled{color:#9ba5b5;cursor:default}
+.delete-record-dialog{width:min(440px,calc(100vw - 40px));padding:24px;border:1px solid #dfe5ed;border-radius:10px;color:#202a3a;box-shadow:0 16px 60px #172c4b24}
+.delete-record-dialog::backdrop{background:#1b2d4938}
+.delete-record-dialog header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}
+.delete-record-dialog h2{margin:0;font-size:18px;line-height:26px}
+.delete-record-dialog [data-close]{width:28px;height:28px;border:0;background:transparent;padding:0;font-size:22px;color:#758198}
+.delete-record-dialog p{margin:0;color:#5a687b;font-size:13px;line-height:22px}
+.delete-record-summary{display:grid;gap:6px;padding:16px;margin:20px 0;background:#f4f6f9;border-radius:6px}
+.delete-record-summary strong{font-size:14px;line-height:22px;overflow-wrap:anywhere}
+.delete-record-summary span{font-size:12px;color:#627189;line-height:18px}
+.delete-record-dialog .delete-record-error{color:#a13c3c;margin:0 0 16px}
+.delete-record-dialog footer{display:flex;justify-content:flex-end;gap:10px}
+.delete-record-dialog footer button{height:36px;min-width:72px;padding:0 16px;font-size:13px}
+.delete-record-dialog .delete-record-confirm{background:#b34d4d;border-color:#b34d4d;color:white}
+.delete-record-dialog button:disabled{opacity:.6;cursor:wait}

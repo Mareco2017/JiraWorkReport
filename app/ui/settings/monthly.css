@@ -1,0 +1,21 @@
+.jira-options{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:white}
+.jira-options #jiraHost .config-panel{border:0;border-radius:0}
+.month-section{border-top:1px solid var(--border);padding:16px var(--panel-pad) 18px}
+.month-heading,.month-controls,.month-entry,.month-issue,.month-search-actions{display:flex;align-items:center;gap:8px}
+.month-heading{justify-content:space-between;margin-bottom:12px}
+.month-heading h3{margin:0;font-size:14px;color:var(--ink);line-height:22px}
+.month-controls select{background:#fff;color:var(--ink);border:1px solid var(--field);border-radius:6px;height:32px;font-size:13px;padding:0 6px}
+.month-entry{justify-content:space-between;gap:16px}
+.month-issue{flex-wrap:wrap;gap:6px 10px;min-width:0}
+.month-key{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+.month-name{font-weight:550;color:var(--ink);font-size:14px;overflow-wrap:anywhere}
+.month-source{font-size:12px;color:#57677b;background:#f0f4f8;border-radius:4px;padding:2px 6px}
+.month-empty{margin:0;color:var(--muted);line-height:20px;font-size:13px}
+.month-section button{white-space:nowrap}
+.month-editor{max-width:600px;display:grid;gap:8px}
+.month-search-actions{justify-content:flex-end;margin-top:4px}
+.month-results{display:grid;max-height:152px;overflow:auto;border:1px solid var(--border);border-radius:6px}
+.month-result{background:white;border:0;text-align:left;display:flex;align-items:center;gap:12px;min-height:34px;padding:5px 10px}
+.month-result[aria-pressed=true],.month-result:hover{background:#edf4ff;color:#1d55ad}
+.month-message{color:var(--muted);font-size:12px;margin:2px 0 0}
+.month-editor [hidden],.month-section [hidden]{display:none!important}

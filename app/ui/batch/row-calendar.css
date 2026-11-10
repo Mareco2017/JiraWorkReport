@@ -1,0 +1,35 @@
+.edit-table .row-date-picker {
+  display:flex; align-items:center; gap:4px; width:100%; height:var(--control-height);
+  padding:0 7px; border:1px solid #cfd9e9; border-radius:6px;
+  background:#f8faff; color:var(--text); font-size:var(--text-field); font-weight:550; white-space:nowrap;
+}
+.row-date-picker svg {width:14px; height:14px; color:#7c8aa0}
+.row-date-picker .chevron {width:12px; height:12px; margin-left:auto; stroke:#8796ad}
+.row-date-picker[aria-expanded=true] {border-color:#99bafa}
+.row-date-picker:disabled {color:#8b98aa; background:#f5f7fa}
+.edit-table .row-date-picker.missing {background:var(--warning-bg); border-color:var(--warning-border)}
+.edit-table .row-date-picker.invalid {border-color:#c67866}
+
+.row-calendar {
+  width:310px; max-width:calc(100vw - 16px); padding:16px; background:#fff;
+  border:1px solid #dce4f0; border-radius:9px; box-shadow:0 8px 32px #17305024;
+}
+.row-calendar header, .row-calendar .calendar-nav, .row-calendar .calendar-caption,
+.row-calendar .calendar-actions {display:flex; align-items:center; justify-content:space-between}
+.row-calendar header, .row-calendar .calendar-nav {margin-bottom:12px}
+.row-calendar h2, .row-calendar .calendar-nav strong {font-size:var(--text-heading); font-weight:600}
+.row-calendar .calendar-close {border:0; color:#8a96a7; font-size:22px; padding:0 3px; line-height:1}
+.row-calendar .calendar-nav button {width:30px; height:30px; padding:0; font-size:23px; line-height:1; color:#68788d; border-color:#e4e9f1}
+.row-calendar button:disabled {opacity:.45}
+.row-calendar .calendar-weekdays, .row-calendar .calendar-days {display:grid; grid-template-columns:repeat(7,1fr); gap:4px; text-align:center}
+.row-calendar .calendar-weekdays {font-size:var(--text-note); color:var(--muted); margin-bottom:8px}
+.row-calendar .calendar-days button {position:relative; height:32px; border:0; background:white; padding:0; font-size:var(--text-field)}
+.row-calendar .calendar-days button:not(:disabled):hover {background:#edf3ff}
+.row-calendar .calendar-days .current {box-shadow:inset 0 0 0 1px #a7c2ff; color:var(--blue)}
+.row-calendar .calendar-days button:disabled {color:#bac4d1; opacity:1}
+.row-calendar .calendar-days .chosen:not(:disabled) {background:var(--blue); color:white; box-shadow:none}
+.row-calendar .has-draft:after {content:''; position:absolute; width:3px; height:3px; border-radius:50%; background:currentColor; bottom:3px; left:calc(50% - 1.5px)}
+.row-calendar .calendar-caption {margin-top:12px; font-size:var(--text-note); color:var(--muted)}
+.row-calendar .calendar-actions {justify-content:flex-start; gap:6px; margin-top:12px; padding-top:11px; border-top:1px solid #eef1f6}
+.row-calendar .shortcut {height:28px; padding:0 10px; background:#f8faff; border-color:#d2dced; font-size:var(--text-field)}
+.row-calendar .clear-date {margin-left:auto; border:0; color:var(--blue); padding:4px; font-size:var(--text-field)}

@@ -1,0 +1,25 @@
+.record-editor{width:min(480px,calc(100vw - 40px));max-height:calc(100vh - 40px);padding:24px;border:1px solid #dfe5ed;border-radius:10px;color:#202a3a;box-shadow:0 16px 60px #172c4b24}
+.record-editor::backdrop{background:#1b2d4938}
+.record-editor .record-editor-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 20px}
+.record-editor h2{margin:0;font-size:18px;line-height:26px}
+.record-editor [data-close]{width:28px;height:28px;border:0;background:transparent;padding:0;font-size:22px;color:#758198}
+.record-editor form{margin:0}
+.record-editor .record-editor-field{display:grid;gap:8px;margin:0;min-width:0}
+.record-editor .record-editor-field>span{font-size:13px;font-weight:600;line-height:18px}
+.record-editor .record-editor-fields{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.85fr);gap:16px;margin-top:20px}
+.record-editor input{width:100%;min-width:0;height:36px;border:1px solid #cfd9e9;border-radius:6px;padding:0 10px;background:#fff;font-size:14px;font-weight:400}
+.record-editor input[name=hours]{font-variant-numeric:tabular-nums}
+.record-editor .date-picker{width:100%;height:36px;font-size:13px;font-weight:500;padding:0 10px;gap:7px}
+.record-editor .date-picker>span{overflow:hidden;text-overflow:ellipsis}
+.record-editor .date-picker .chevron{width:12px;height:12px;margin-left:auto}
+.record-editor .record-editor-destination{display:grid;gap:10px;margin:20px 0;padding:16px;background:#f4f6f9;border-radius:6px}
+.record-editor .record-editor-destination>div{display:grid;grid-template-columns:64px minmax(0,1fr);gap:12px;line-height:20px}
+.record-editor dt{font-size:12px;font-weight:400;color:#6d7b90}
+.record-editor dd{margin:0;font-size:13px;color:#34455b;overflow-wrap:anywhere}
+.record-editor .record-editor-error{margin:0 0 16px;color:#a13c3c;font-size:13px;line-height:22px}
+.record-editor footer{display:flex;justify-content:flex-end;gap:10px}
+.record-editor footer button{height:36px;min-width:72px;padding:0 16px;font-size:13px}
+.record-editor .record-editor-save{background:#1762ed;border-color:#1762ed;color:white}
+.record-editor [aria-invalid=true]{border-color:#bf7777}
+.record-editor input:disabled,.record-editor .date-picker:disabled{background:#f4f6f9;color:#7c899b}
+.record-editor button:disabled{opacity:.6;cursor:wait}
