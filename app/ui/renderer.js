@@ -1,3 +1,4 @@
+import {mountTodo} from './todo/view.js';
 import {templates} from './templates.js';
 import {typeMapping,monthlyTasks,requirementTasks,taskForType,validateRecord,isCompletedItem} from '../worklogs.js';
 import {attachIssueClear,refreshIssueClear} from './issue-input.js';
@@ -6,12 +7,13 @@ import {openRecordEditor} from './record-editor.js';
 const $ = selector=>document.querySelector(selector);
 const main=$('#content');
 const defaultCommonTypes=['需求分析','需求分析评审','概要设计','规格撰写','4.0应用开发','日常综合'];
-let snapshot, page='daily', types=Object.keys(typeMapping), selectedType='需求分析', issueSelection=null, selectedFile=null, noteRecords=[], step=1, activeBatch=null;
+let snapshot, page='todo', types=Object.keys(typeMapping), selectedType='需求分析', issueSelection=null, selectedFile=null, noteRecords=[], step=1, activeBatch=null;
 const localToday=()=>new Date().toLocaleDateString('sv-SE');
 const escapeText=value=>String(value ?? '').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const labelDay=day=>day ? new Date(day+'T12:00:00').toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'short'}) : '待定日期';
 let toastTimer;
 const pageViews = new Map();
+let disposeTodo;
 const submissionBatches = new Map();
 const releasedBatches = new Set();
 let drawerDesiredOpen = false;
@@ -84,6 +86,9 @@ async function refresh(){
 const safe = action=>async event=>{try{await action(event);}catch(error){toast(error.message);}};
 document.querySelectorAll('[data-page]').forEach(button=>button.onclick=safe(()=>navigate(button.dataset.page)));
 async function navigate(next){
+ disposeTodo?.();disposeTodo=null;
+ main.classList.remove('todo-host');
+ document.querySelector('#todayCount').closest('.status-row').hidden=false;
  closeBatchPopup();
  if(['daily','batch'].includes(page) && main.children.length){
   const view=document.createDocumentFragment();
@@ -91,7 +96,19 @@ async function navigate(next){
   pageViews.set(page,view);
  }
  document.querySelector('.date-popover')?.remove();document.querySelector('.hours-popover')?.remove();document.querySelector('.issue-results')?.remove();
- page=next;await refresh();
+ page=next;
+ // 待办不依赖initialize；原工时快照和缓存继续归原页面管理。
+ if(page==='todo'){
+  document.querySelectorAll('[data-page]').forEach(button=>button.classList.toggle('active',button.dataset.page===page));
+  $('#pageStyle').disabled=true;$('#historyStyle').disabled=true;
+  main.classList.add('todo-host');
+  $('#todayCount').closest('.status-row').hidden=true;
+  disposeTodo=mountTodo(main,{call,onCount:count=>{
+   const badge=$('#todoNavCount');badge.hidden=false;badge.textContent=count===null?'—':count;
+  }});
+  return;
+ }
+ await refresh();
  document.querySelectorAll('[data-page]').forEach(button=>button.classList.toggle('active',button.dataset.page===page));
  $('#pageStyle').disabled=page!=='batch'&&page!=='history';$('#historyStyle').disabled=page!=='history';
  const cached=pageViews.get(page);
@@ -686,7 +703,10 @@ async function settings(){
 }
 // The editor owns Escape even after a calendar rerender moves focus to body; its cancel handler must see the open picker first.
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.querySelector('.record-editor[open]')){document.querySelector('.date-popover')?.remove();document.querySelector('.hours-popover')?.remove();}});
-navigate('daily').catch(error=>{main.innerHTML='<header class="topbar"><h1>JIRA工时填报</h1></header><p>'+escapeText(error.message)+'</p><button id="retryLoad">重新打开</button>';$('#retryLoad').onclick=()=>location.reload();});
+navigate('todo').catch(error=>{main.innerHTML='<header class="topbar"><h1>JIRA工时填报</h1></header><p>'+escapeText(error.message)+'</p><button id="retryLoad">重新打开</button>';$('#retryLoad').onclick=()=>location.reload();});
+
+// 启动直接展示待办；宿主连接摘要仍读取既有本机配置，不阻塞待办入口。
+refresh().catch(()=>{document.querySelectorAll('.status-value').forEach((row,index)=>{if(index<2)row.textContent='暂不可用';});});
 
 window.addEventListener('keydown',event=>{if(event.key==='Escape')closeBatchPopup();});
 document.addEventListener('pointerdown',event=>{if(batchPopup&&!batchPopup.contains(event.target)&&!batchPopupAnchor?.contains(event.target))closeBatchPopup();});

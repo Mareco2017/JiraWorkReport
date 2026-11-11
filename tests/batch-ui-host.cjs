@@ -32,7 +32,7 @@ app.whenReady().then(async()=>{
  await window.loadFile(path.resolve('app/ui/index.html'));
  const run=code=>window.webContents.executeJavaScript(code);
  const wait=async code=>{for(let n=0;n<100;n++){if(await run(code))return;await new Promise(r=>setTimeout(r,30));}throw Error('UI wait failed: '+code);};
- await wait("Boolean(document.querySelector('[data-open-batch]'))");
+ await wait("Boolean(document.querySelector('[data-page=todo].active'))");await run("document.querySelector('[data-page=daily]').click()");await wait("Boolean(document.querySelector('[data-open-batch]'))");
  await run("document.querySelector('[data-page=batch]').click()");
  await wait("Boolean(document.querySelector('#localTab'))");
  assert.equal(await run("document.querySelector('#read').disabled"),true);

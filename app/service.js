@@ -1,3 +1,4 @@
+import {PersonalTodoService,todoCommands} from './todos.js';
 import {BatchImportService} from './batch-import.js';
 import { randomUUID } from 'node:crypto';
 
@@ -32,8 +33,13 @@ export class WorkbenchService {
     return this.submission;
   }
   async call(command, data = {}) {
-    const commands = new Set(['initialize','saveDraft','deleteDraft','deleteRecord','updateRecord','saveCommonTypes','searchIssues','getIssue','listTypes','searchMonthly','testJira','saveJira','listDocuments','readDocument','parseImport','chooseNotes','chooseExecutable','testAgent','saveAgent','suggest','bindMonth','startSubmission','getBatch','retry','returnToDrafts','openIssue']);
+    const commands = new Set([...todoCommands,'initialize','saveDraft','deleteDraft','deleteRecord','updateRecord','saveCommonTypes','searchIssues','getIssue','listTypes','searchMonthly','testJira','saveJira','listDocuments','readDocument','parseImport','chooseNotes','chooseExecutable','testAgent','saveAgent','suggest','bindMonth','startSubmission','getBatch','retry','returnToDrafts','openIssue']);
     if (!commands.has(command)) throw new Error('不支持的工作台操作');
+    // Personal data stays available before any JIRA configuration or account scope is consulted.
+    if(todoCommands.includes(command)) {
+      this.personalTodos ||= new PersonalTodoService({store:this.store,today:this.today,id:this.todoId,now:this.todoNow});
+      return this.personalTodos.call(command,data);
+    }
     const config = await this.store.loadConfig();
     // Earlier UI drafts saved a misspelled engine label. Normalize at the configuration boundary, retaining credential references.
     for (const setting of [config.agent, ...(config.modelServices || [])]) {

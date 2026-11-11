@@ -50,7 +50,7 @@ app.whenReady().then(async()=>{
  const selectedScenes=process.argv[2]?scenes.filter(value=>process.argv[2].split(',').includes(value)):scenes;
  for(const viewport of [{name:'baseline',width:1250,height:750},{name:'compact',width:1024,height:720}])for(scene of selectedScenes){
   batch=null;window.setContentSize(viewport.width,viewport.height);
-  await window.loadFile(path.resolve('app/ui/index.html'));await wait("Boolean(document.querySelector('[data-open-batch]'))");
+  await window.loadFile(path.resolve('app/ui/index.html'));await wait("Boolean(document.querySelector('[data-page=todo].active'))");await action("document.querySelector('[data-page=daily]').click()");await wait("Boolean(document.querySelector('[data-open-batch]'))");
   await action("document.querySelector('[data-page=batch]').click()");await wait("Boolean(document.querySelector('#localTab'))");
   if(!scene.startsWith('directory_')&&!['default','paste_empty','paste','paste_invalid','paste_failed'].includes(scene)){
    await wait("Boolean(document.querySelector('.week-file'))");

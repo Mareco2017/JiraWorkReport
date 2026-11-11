@@ -1,3 +1,4 @@
+import {validateTodoState} from './todo-data.js';
 import {mkdir, readFile, writeFile, rename, rm} from 'node:fs/promises';
 import {join, resolve, dirname} from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
@@ -53,6 +54,18 @@ function serialize(file, operation) {
   return next;
 }
 
+// ENOENT alone means a first-use empty list; every other read failure preserves the original file.
+async function readPersonalTodos(file) {
+  let content;
+  try { content = await readFile(file,'utf8'); }
+  catch(error) {
+    if(error.code==='ENOENT')return {groups:[],todos:[]};
+    throw Object.assign(new Error('本机待办读取失败，请检查文件权限后重试'),{code:'TODO_READ_FAILED'});
+  }
+  try {return validateTodoState(JSON.parse(content));}
+  catch {throw Object.assign(new Error('本机待办文件无法读取，原文件已保留，请恢复有效文件后重试'),{code:'TODO_READ_FAILED'});}
+}
+
 /** The main process owns all workspace changes; renderer pages share one account-scoped state. */
 export class Store {
   constructor(root) { this.root = resolve(root); }
@@ -79,6 +92,24 @@ export class Store {
       const updated = await change(state) || state;
       await replaceJson(file,updated,damaged);
       return updated;
+    });
+  }
+
+  async loadPersonalTodos() {
+    const file=join(this.root,'personal-todos.json');
+    await (pendingWrites.get(file)||Promise.resolve()).catch(()=>{});
+    return readPersonalTodos(file);
+  }
+
+  // Read inside the existing per-file queue so separate commands never replace each other's changes.
+  async updatePersonalTodos(change) {
+    const file=join(this.root,'personal-todos.json');
+    return serialize(file,async()=>{
+      const state=await readPersonalTodos(file);
+      await change(state);
+      try {await replaceJson(file,state,false);}
+      catch {throw Object.assign(new Error('本机待办保存失败，原数据已保留，请检查写入权限后重试'),{code:'TODO_SAVE_FAILED'});}
+      return state;
     });
   }
 
