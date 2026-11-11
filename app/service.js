@@ -1,3 +1,4 @@
+import {BatchImportService} from './batch-import.js';
 import { randomUUID } from 'node:crypto';
 
 // 桌面页面只调用这里列出的业务动作。凭据读取和远端请求留在主进程。
@@ -31,7 +32,7 @@ export class WorkbenchService {
     return this.submission;
   }
   async call(command, data = {}) {
-    const commands = new Set(['initialize','saveDraft','deleteDraft','deleteRecord','updateRecord','saveCommonTypes','searchIssues','getIssue','listTypes','searchMonthly','testJira','saveJira','listNotes','readNote','parseNote','chooseNotes','chooseExecutable','testAgent','saveAgent','suggest','bindMonth','startSubmission','getBatch','retry','returnToDrafts','openIssue']);
+    const commands = new Set(['initialize','saveDraft','deleteDraft','deleteRecord','updateRecord','saveCommonTypes','searchIssues','getIssue','listTypes','searchMonthly','testJira','saveJira','listDocuments','readDocument','parseImport','chooseNotes','chooseExecutable','testAgent','saveAgent','suggest','bindMonth','startSubmission','getBatch','retry','returnToDrafts','openIssue']);
     if (!commands.has(command)) throw new Error('不支持的工作台操作');
     const config = await this.store.loadConfig();
     // Earlier UI drafts saved a misspelled engine label. Normalize at the configuration boundary, retaining credential references.
@@ -82,16 +83,16 @@ export class WorkbenchService {
     if (command === 'saveCommonTypes') { config.commonTypes=data.types;await this.store.saveConfig(config);return this.publicConfig(config); }
     if (command === 'chooseNotes') {
       const directory=await this.chooseDirectory();
-      if(directory){config.notesDirectory=directory;await this.store.saveConfig(config);}
+      if(directory){config.notesDirectory=directory;await this.store.saveConfig(config);this.batchImport?.clearPreview();}
       return directory;
     }
     if (command === 'chooseExecutable') return this.chooseExecutable();
-    if (['listNotes','readNote','parseNote'].includes(command)) {
-      if(!config.notesDirectory) throw new Error('请先选择周文件所在文件夹');
-      const notes=this.notesFactory(config.notesDirectory);
-      if(command==='listNotes') return notes.list();
-      if(command==='readNote') return notes.read(data.file);
-      return notes.parse(data.file,{weekStart:data.weekStart});
+    if (['listDocuments','readDocument','parseImport'].includes(command)) {
+      this.batchImport ||= new BatchImportService({store:this.store,agent:this.agent,documentsFactory:this.documentsFactory});
+      if(command==='parseImport')return this.batchImport.parse(data,config,scope);
+      if(!config.notesDirectory)throw new Error('请先选择文档所在文件夹');
+      if(command==='listDocuments')return {files:await this.documentsFactory(config.notesDirectory).list()};
+      return this.batchImport.read(data.file,config,scope);
     }
     if (command==='testAgent') {
       this.verifiedAgent=null;

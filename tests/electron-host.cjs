@@ -9,14 +9,14 @@ app.whenReady().then(async()=>{
  const {Secrets}=await import('../app/secrets.js');
  const {WorkbenchService}=await import('../app/service.js');
  const {SubmissionService}=await import('../app/submission.js');
- const {WeekNotes}=await import('../app/week-notes.js');
+ const {DocumentDirectory}=await import('../app/documents.js');
  const {typeMapping,typeValues}=await import('../app/worklogs.js');
  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'jira-product-e2e-'));
  const store=new Store(directory),secrets=new Secrets(path.join(directory,'credentials'),safeStorage);
  const ref=await secrets.put('fictional-token');
  const notes=path.join(directory,'notes');await fs.mkdir(notes);
- await fs.writeFile(path.join(notes,'2月第3周.md'),'weekStart: 2024-02-12\n## 本周工时记录\n周一：\n2.5h 梳理报表筛选需求\n1.5h 评审报表异常交互\n周二：\n2h 编写需求规格\n## 本周待办事项\n无关链接 DEMO-999\n');
- await store.saveConfig({jira:{url:'https://fixture.invalid',username:'tester',userKey:'tester',timeZone:'Asia/Shanghai',keyRef:ref},notesDirectory:notes});
+ await fs.writeFile(path.join(notes,'报表工作随记.md'),'# 普通工作随记\n2024-02-12，2.5小时梳理报表筛选需求\n2024-02-12，1.5小时评审报表异常交互\n2024-02-13，2小时编写需求规格\n');
+ await store.saveConfig({jira:{url:'https://fixture.invalid',username:'tester',userKey:'tester',timeZone:'Asia/Shanghai',keyRef:ref},notesDirectory:notes,agent:{engine:'Codex CLI',mode:'custom',approvedInternal:true}});
  let worklogs=[],counter=100;
  const issues=[
   {id:'1',key:'DEMO-100',title:'报表筛选体验优化',project:'DEMO',typeId:'10001',assignee:'tester',assigneeName:'tester',created:'2024-02-01',subtasks:[]},
@@ -48,9 +48,14 @@ app.whenReady().then(async()=>{
  };
  let window;
  const service=new WorkbenchService({
-  store,secrets,agent:{async test(){return {ok:true};},async suggest(records){return records.map(row=>({id:row.id,type:'需求分析',task:typeMapping['需求分析']}));}},
+  store,secrets,agent:{async test(){return {ok:true};},async suggest(records){return records.map(row=>({id:row.id,type:'需求分析',task:typeMapping['需求分析']}));},
+   // 此替身只将本夹具明确声明的事实返回给真实导入服务，不代表模型语义理解通过。
+   async extract(content){return content.split('\n').flatMap((line,index)=>{
+    const match=line.match(/^(\d{4}-\d{2}-\d{2})，([\d.]+)小时(.+)$/);
+    return match?[{title:match[3],day:match[1],hours:Number(match[2]),type:'需求分析',startLine:index+1,endLine:index+1,evidence:match[3],evidenceOccurrence:1}]:[];
+   });}},
   createJira:()=>jira,createSubmission:jira=>new SubmissionService({store,jira,today:()=> '2024-02-20',onUpdate:batch=>window.webContents.send('workbench:update',batch)}),
-  today:()=> '2024-02-20',notesFactory:directory=>new WeekNotes({directory}),chooseDirectory:async()=>notes,chooseExecutable:async()=>'/fixture/cli',openExternal:async url=>{console.log('Fixture opened URL '+url);}
+  today:()=> '2024-02-20',documentsFactory:directory=>new DocumentDirectory({directory}),chooseDirectory:async()=>notes,chooseExecutable:async()=>'/fixture/cli',openExternal:async url=>{console.log('Fixture opened URL '+url);}
  });
  window=new BrowserWindow({width:1280,height:800,webPreferences:{preload:path.resolve('app/preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true}});
  ipcMain.handle('workbench:call',async(_,name,payload)=>{try{return {ok:true,value:await service.call(name,payload)};}catch(error){return {ok:false,error:error.message,code:error.code,field:error.field};}});

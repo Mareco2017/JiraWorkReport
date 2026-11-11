@@ -81,3 +81,12 @@ test('legacy saved DSH engine labels are normalized once on config load without 
  assert.equal(observed.keyRef,'old-encrypted-reference');
  assert.equal(secretReads,0);
 });
+
+test('document commands use saved folder and paste import does not require a folder',async()=>{
+ const calls=[];
+ const service=new WorkbenchService({store:{loadConfig:async()=>({}),load:async()=>({drafts:[],settings:{},batches:[],history:[]})},batchImport:{parse:async(data,config,scope)=>{calls.push({data,config,scope});return {outcome:'empty',records:[]};}}});
+ assert.equal((await service.call('parseImport',{kind:'paste',content:'实际工作'})).outcome,'empty');
+ assert.equal(calls[0].data.content,'实际工作');
+ await assert.rejects(service.call('listDocuments'),/文档/);
+ await assert.rejects(service.call('parseNote'),/不支持/);
+});

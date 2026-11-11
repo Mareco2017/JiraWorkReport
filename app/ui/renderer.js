@@ -16,16 +16,29 @@ const submissionBatches = new Map();
 const releasedBatches = new Set();
 let drawerDesiredOpen = false;
 let repairJiraConnection = false;
+let importKind='file', importSource=null, filePreview=null, pasteResult=null, importBusy=false, previewFailed=false;
+const importEdits=new Map();
+// 无效标题不能写入正式草稿，页面内按已确认来源和正文指纹保留，重读时优先于旧有效稿。
+function rememberImportEdits(){
+ if(importSource&&noteRecords.length)importEdits.set(importSource.id+'\n'+importSource.contentHash,structuredClone(noteRecords));
+}
+function restoreImportEdits(source,records){
+ const edits=new Map((importEdits.get(source.id+'\n'+source.contentHash)||[]).map(row=>[row.id,row]));
+ return records.map(row=>edits.get(row.id)||row);
+}
+const importName=()=>importKind==='paste'?'手动粘贴内容':selectedFile?.name||'';
 
 function sourceKey(flow=page,fileId=selectedFile?.id) {
- return flow==='batch' ? 'batch/'+(fileId||'') : 'daily';
+ return flow==='batch' ? 'batch/'+(importSource?.id||fileId||'') : 'daily';
 }
 function batchSource(batch) {
  const item=batch.items?.[0];
- return item?.source==='批量填报' ? sourceKey('batch',item.sourceFile) : 'daily';
+ return item?.source==='批量填报' ? 'batch/'+(item.importSourceId||item.sourceFile||'') : 'daily';
 }
 function rememberBatch(batch) {
  if(!batch || batch.returnedToDrafts || releasedBatches.has(batch.id))return;
+ // 主进程以确切记录编号关联的旧批次也可能挂在新来源键下，更新这些已知关联。
+ for(const [key,known] of submissionBatches)if(known.id===batch.id)submissionBatches.set(key,batch);
  submissionBatches.set(batchSource(batch),batch);
 }
 function currentBatch() {
@@ -71,6 +84,7 @@ async function refresh(){
 const safe = action=>async event=>{try{await action(event);}catch(error){toast(error.message);}};
 document.querySelectorAll('[data-page]').forEach(button=>button.onclick=safe(()=>navigate(button.dataset.page)));
 async function navigate(next){
+ closeBatchPopup();
  if(['daily','batch'].includes(page) && main.children.length){
   const view=document.createDocumentFragment();
   while(main.firstChild)view.append(main.firstChild);
@@ -186,14 +200,14 @@ function issueSearch(input,chosen,onQuery=()=>{}){
    const response=await call('searchIssues',{query});const rows=response.issues || response;
    // A completed selection or a cleared query must not be replaced by an older search response.
    if(current!==revision)return;
-   const list=document.createElement('div');list.className='issue-results';
-   for(const row of rows){const button=document.createElement('button');button.type='button';button.textContent=row.key+' · '+(row.title || row.fields?.summary || '');button.onclick=safe(async()=>{
+   const list=document.createElement('div');list.className=page==='batch'?'issue-results issue-candidates row-popover':'issue-results';
+   for(const row of rows){const button=document.createElement('button');button.type='button';if(page==='batch'){button.className='candidate';button.innerHTML=escapeText(row.key)+'<span>'+escapeText(row.title||row.fields?.summary||'')+'</span>';}else button.textContent=row.key+' · '+(row.title || row.fields?.summary || '');button.onclick=safe(async()=>{
     const selection=++revision;clearTimeout(timer);list.remove();
     const detail=await call('getIssue',{key:row.key});if(selection!==revision)return;
-    chosen({...row,...detail,subtasks:detail.subtasks || detail.fields?.subtasks || []});input.value=button.textContent;refreshClear();
+    chosen({...row,...detail,subtasks:detail.subtasks || detail.fields?.subtasks || []});input.value=page==='batch'?row.key:button.textContent;refreshClear();closeBatchPopup();
    });list.append(button);}
    if(!rows.length)list.textContent='未找到可访问的工单';
-   input.parentElement.append(list);
+   if(page==='batch')placeBatchPopup(input,list);else input.parentElement.append(list);
   }),280);
  };
 }
@@ -257,104 +271,171 @@ function renderQueue(){
  setSubmissionButton(rows);
 }
 
-function clearReadFeedback() {
- $('#readError').hidden=true;$('#readError').textContent='';$('#read').textContent='读取并解析';
+// 解析可在用户查看历史时结束；批量页节点此时在既有pageViews缓存中，反馈仍归属该视图。
+function batchRoot(){return pageViews.get('batch')||main;}
+const batch$=selector=>batchRoot().querySelector(selector);
+function clearReadFeedback(){
+ batch$('#readError').hidden=true;batch$('#readError').textContent='';batch$('#readError').classList.remove('no-result');
+ batch$('#pasteInput').removeAttribute('aria-invalid');
 }
-function showReadFailure(file,error) {
- const detail={ENOENT:'文件已移动或不存在',EACCES:'没有读取这个文件的权限',EPERM:'没有读取这个文件的权限',INVALID_FILE:'文件不在所选文件夹中'}[error.code] || error.message;
- $('#previewBody').textContent='';
- $('#readError').textContent='「'+file.name+'」读取失败：'+detail+'。请检查文件后重试。';
- $('#readError').hidden=false;$('#read').textContent='重试读取';
+function importFeedback(message,{settings=false,empty=false,batchId=null}={}){
+ const box=batch$('#readError');box.hidden=false;box.classList.toggle('no-result',empty);box.innerHTML='<span>'+escapeText(message)+'</span>';
+ // 全登记结果没有可编辑行，只通过主进程给出的确切批次提供当前可见的恢复入口。
+ if(batchId){const button=document.createElement('button');button.className='quiet-link';button.textContent='查看本次提交';button.dataset.reopenBatch=batchId;button.onclick=safe(async()=>{const batch=await call('getBatch',{id:batchId});activeBatch=batch.id;await showBatch(batch,{open:true});});box.append(button);}
+ if(settings){const button=document.createElement('button');button.className='quiet-link';button.textContent=message.includes('尚未配置')?'配置 Agent':'检查配置';button.onclick=safe(()=>navigate('settings'));box.append(button);}
 }
-
-async function batch(){
- $('#step1').onclick=()=>showStep(1);$('#step2').onclick=()=>showStep(2);$('#step3').onclick=()=>showStep(3);
- $('#back').onclick=()=>showStep(1);$('#editAgain').onclick=()=>showStep(2);$('#nextReview').onclick=()=>showStep(3);
- $('#submit').onclick=safe(()=>submitRecords(noteRecords));
- $('#read').onclick=safe(async()=>{
-  if(!selectedFile)throw new Error('请选择一份周文件');
-  clearReadFeedback();
-  $('#readProgress').hidden=false;$('#readStage').textContent='正在读取周文件';$('#readSource').textContent=selectedFile.name;$('#read').hidden=true;$('#read').disabled=true;
-  $('#readCount').textContent='';$('#readMeter').removeAttribute('value');
-  document.querySelectorAll('.week-file').forEach(button=>button.disabled=true);$('#step2').disabled=true;$('#step3').disabled=true;
-  try{
-   const file=selectedFile;
-   let parsed;
-   try{parsed=await call('parseNote',{file:file.id});}
-   catch(error){if(page==='batch'&&selectedFile?.id===file.id)showReadFailure(file,error);return;}
-   if(page!=='batch'||selectedFile?.id!==file.id)return;
-   await refresh();
-   const existing=new Map(snapshot.state.drafts.filter(row=>row.sourceFile===file.id).map(row=>[row.id,row]));
-   const registered=new Set(snapshot.state.history.filter(row=>row.status==='success').map(row=>row.id));
-   noteRecords=(parsed.records || []).filter(row=>!registered.has(row.id)).map(row=>existing.get(row.id)||({...row,source:'批量填报',sourceFile:file.id}));
-   $('#readStage').textContent='正在解析工时';$('#readMeter').max=noteRecords.length||1;
-   for(const [index,row] of noteRecords.entries()){
-    await call('saveDraft',{record:row});$('#readCount').textContent=(index+1)+' / '+noteRecords.length+' 条';$('#readMeter').value=index+1;
+function emptySource(title,detail,choose=false){
+ return '<div class="source-empty"><svg aria-hidden="true"><use href="#batch"/></svg><strong>'+escapeText(title)+'</strong><p>'+escapeText(detail)+'</p>'+(choose?'<button class="primary" id="chooseDirectory">'+(typeof choose==='string'?choose:'选择文件夹')+'</button>':'')+'</div>';
+}
+function updateImportControls(){
+ const failed=importKind==='file'&&previewFailed;
+ batch$('#read').textContent=failed?'重试读取':'开始解析';
+ batch$('#read').disabled=importBusy||(importKind==='paste'?!batch$('#pasteInput').value.trim():!filePreview&&!failed);
+ batch$('#read').hidden=importBusy;batch$('#readProgress').hidden=!importBusy;batch$('#sourceHint').hidden=importBusy;
+ batch$('#sourceHint').textContent=importKind==='file'&&!selectedFile?'请选择一份文档':'缺失的日期和工时，解析后手动补齐';
+ for(const node of batchRoot().querySelectorAll('.week-file,#localTab,#pasteTab,#changeDirectory,#pasteInput'))node.disabled=importBusy;
+ batch$('#step2').disabled=importBusy||!noteRecords.length;batch$('#step3').disabled=importBusy||!noteRecords.length;
+}
+function chooseImportKind(kind){
+ rememberImportEdits();importKind=kind;clearReadFeedback();
+ for(const [value,id] of [['file','local'],['paste','paste']]){
+  batch$('#'+id+'Tab').classList.toggle('selected',kind===value);batch$('#'+id+'Tab').setAttribute('aria-selected',String(kind===value));
+  batch$('#'+id+'Source').hidden=kind!==value;
+ }
+ importSource=kind==='file'?filePreview?.source:pasteResult?.source;
+ noteRecords=importSource?restoreImportEdits(importSource,snapshot.state.drafts.filter(row=>row.importSourceId===importSource.id)):[];
+ updateImportControls();if(kind==='paste')batch$('#pasteInput').focus();
+}
+async function previewDocument(file){
+ rememberImportEdits();selectedFile=file;filePreview=null;importSource=null;noteRecords=[];previewFailed=false;clearReadFeedback();
+ batchRoot().querySelectorAll('.week-file').forEach(button=>{const selected=button.dataset.file===file.id;button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',String(selected));});
+ batch$('#previewName').textContent=file.name;batch$('#previewBody').textContent='';updateImportControls();
+ try{
+  filePreview=await call('readDocument',{file:file.id});importSource=filePreview.source;
+  batch$('#previewBody').textContent=filePreview.content;
+  noteRecords=restoreImportEdits(importSource,snapshot.state.drafts.filter(row=>row.importSourceId===importSource.id));
+ }catch(error){
+  previewFailed=true;batch$('#previewBody').innerHTML=emptySource('文档读取失败','请检查文件是否仍存在，以及是否有读取权限。');
+  importFeedback('「'+file.name+'」读取失败：'+error.message+'。请检查后重试。');
+ }
+ updateImportControls();
+}
+function documentModifiedLabel(value){
+ const date=new Date(value),day=date.toLocaleDateString('sv-SE');
+ const yesterday=new Date(new Date(snapshot.today+'T12:00:00').getTime()-86400000).toLocaleDateString('sv-SE');
+ const label=day===snapshot.today?'今天':day===yesterday?'昨天':(date.getMonth()+1)+'月'+date.getDate()+'日';
+ return label+' '+date.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});
+}
+async function loadImportDirectory(){
+ batch$('#directoryPath').textContent=snapshot.config.notesDirectory||'尚未配置';batch$('#directoryPath').title=snapshot.config.notesDirectory||'';
+ batch$('#changeDirectory').textContent=snapshot.config.notesDirectory?'更换文件夹':'配置文件夹';
+ const list=batch$('#weekFiles');list.replaceChildren();let files=[];
+ try{
+  if(!snapshot.config.notesDirectory)list.innerHTML=emptySource('尚未配置文件夹','选择文档存放位置后，在这里查看文件。',true);
+  else {
+   ({files}=await call('listDocuments'));
+   if(!files.length)list.innerHTML=emptySource('没有可读取的文档','支持 .md、.txt、.docx，仅读取第一层。','更换文件夹');
+   for(const file of files){
+    const button=document.createElement('button');button.className='week-file';button.dataset.file=file.id;
+    const format=/\.docx$/i.test(file.name)?'Word':/\.md$/i.test(file.name)?'Markdown':'文本';
+    button.innerHTML='<svg aria-hidden="true"><use href="#batch"/></svg><strong>'+escapeText(file.name)+'</strong><span class="file-range">'+format+' · '+documentModifiedLabel(file.modifiedAt)+'</span>';
+    button.onclick=safe(()=>previewDocument(file));list.append(button);
    }
-   if(!noteRecords.length){$('#readError').hidden=false;$('#readError').textContent=(parsed.warnings||[{message:'未找到可识别的工时记录'}]).map(value=>value.message || value).join('；');return;}
-   $('#agentNotice').hidden=true;
-   $('#readStage').textContent='正在生成工时建议';$('#readCount').textContent='共 '+noteRecords.length+' 条';$('#readMeter').removeAttribute('value');
-   try{
-    const suggestions=await call('suggest',{records:noteRecords.map(row=>({id:row.id,title:row.title}))});
-    for(const suggestion of suggestions){const row=noteRecords.find(row=>row.id===suggestion.id);if(row && !row.touched){row.type=suggestion.type;row.task=suggestion.task;await call('saveDraft',{record:row});}}
-    if(page==='batch'&&selectedFile?.id===file.id){$('#readCount').textContent=noteRecords.length+' / '+noteRecords.length+' 条';$('#readMeter').value=noteRecords.length;}
-   }catch(error){if(page==='batch'&&$('#agentNotice')){$('#agentNotice').hidden=false;$('#agentNotice').textContent=error.message;}}
-   if(page==='batch'&&selectedFile?.id===file.id)showStep(2);
-  }finally{if($('#read')){
-   $('#readProgress').hidden=true;$('#read').hidden=false;$('#read').disabled=false;document.querySelectorAll('.week-file').forEach(button=>button.disabled=false);
-   $('#step2').disabled=!noteRecords.length;$('#step3').disabled=!noteRecords.length;
-  }}
+  }
+ }catch(error){list.innerHTML=emptySource('无法读取文件夹','该位置不存在或没有访问权限。','重新选择');}
+ batch$('#fileListTitle').nextElementSibling.textContent=files.length+' 份';
+ const choose=async()=>{rememberImportEdits();if(await call('chooseNotes')){await refresh();selectedFile=null;filePreview=null;importSource=null;noteRecords=[];previewFailed=false;clearReadFeedback();await loadImportDirectory();batch$('#previewName').textContent='';batch$('#previewBody').innerHTML=emptySource('选择一份文档预览','仅展示文字内容，不更改原文件。');updateImportControls();}};
+ batch$('#changeDirectory').onclick=safe(choose);if(batch$('#chooseDirectory'))batch$('#chooseDirectory').onclick=safe(choose);
+ if(selectedFile&&files.some(file=>file.id===selectedFile.id))await previewDocument(selectedFile);
+}
+async function batch(){
+ batch$('#step1').onclick=()=>showStep(1);batch$('#step2').onclick=()=>showStep(2);batch$('#step3').onclick=()=>showStep(3);
+ batch$('#back').onclick=()=>{rememberImportEdits();showStep(1);};batch$('#editAgain').onclick=()=>showStep(2);batch$('#nextReview').onclick=()=>showStep(3);
+ batch$('#submit').onclick=safe(()=>submitRecords(noteRecords));
+ batch$('#localTab').onclick=()=>chooseImportKind('file');batch$('#pasteTab').onclick=()=>chooseImportKind('paste');
+ batch$('#pasteInput').oninput=()=>{rememberImportEdits();pasteResult=null;importSource=null;noteRecords=[];clearReadFeedback();batch$('#pasteCount').textContent=batch$('#pasteInput').value.length+' 字';updateImportControls();};
+ batch$('#read').onclick=safe(async()=>{
+  if(previewFailed&&importKind==='file'){await previewDocument(selectedFile);return;}
+  if(importKind==='paste'&&!batch$('#pasteInput').value.trim()){importFeedback('请先粘贴或输入工作记录。');batch$('#pasteInput').setAttribute('aria-invalid','true');batch$('#pasteInput').focus();updateImportControls();return;}
+  rememberImportEdits();clearReadFeedback();importBusy=true;updateImportControls();
+  batch$('#readStage').textContent='Agent 正在识别工时记录';batch$('#readSource').textContent=importName();batch$('#readCount').textContent='';batch$('#readMeter').removeAttribute('value');
+  try{
+   const parsed=await call('parseImport',importKind==='file'?{kind:'file',sourceId:filePreview.source.id}:{kind:'paste',content:batch$('#pasteInput').value});
+   await refresh();importSource=parsed.source;if(importKind==='paste')pasteResult=parsed;
+   noteRecords=restoreImportEdits(parsed.source,parsed.records);rememberImportEdits();
+   if(parsed.batchId){const batch=await call('getBatch',{id:parsed.batchId});rememberBatch(batch);submissionBatches.set('batch/'+parsed.source.id,batch);}
+   if(!noteRecords.length){importFeedback(parsed.outcome==='registered'?'当前内容中的工时已全部登记。可查看填报记录。':'未识别到工时记录。请检查当前内容，或更换文档后再次解析。',{empty:true,batchId:parsed.batchId});return;}
+   batch$('#agentNotice').hidden=false;batch$('#agentNotice').textContent='已按原文识别工时记录，请核对并补齐标记的字段后提交。';showStep(2);
+  }catch(error){importFeedback(error.message,{settings:['DESTINATION_UNVERIFIED','AGENT_UNCONFIGURED','CLI_NOT_FOUND','MODEL_CONFIGURATION','MODEL_KEY_MISSING'].includes(error.code)});}
+  finally{importBusy=false;updateImportControls();}
  });
- let files;
- try{files=await call('listNotes');}
- catch(error){
-  $('#weekFiles').innerHTML='<p class="empty">请选择周文件所在文件夹</p><button id="chooseDirectory" class="primary">选择文件夹</button>';
-  $('#chooseDirectory').onclick=safe(async()=>{if(await call('chooseNotes'))await batch();});return;
- }
- $('#fileListTitle').nextElementSibling.textContent=files.length+' 份';
- $('#weekFiles').replaceChildren();
- for(const file of files){
-  const button=document.createElement('button');button.className='week-file';button.innerHTML='<svg aria-hidden="true"><use href="#batch"/></svg><strong>'+escapeText(file.name)+'</strong><span class="file-range">Markdown 周文件</span>';
-  button.onclick=safe(async()=>{
-   selectedFile=file;clearReadFeedback();document.querySelectorAll('.week-file').forEach(el=>el.classList.toggle('selected',el===button));
-   $('#previewName').textContent=file.name;$('#previewBody').textContent='';
-   noteRecords=snapshot.state.drafts.filter(row=>row.sourceFile===file.id);
-   $('#step2').disabled=!noteRecords.length;$('#step3').disabled=!noteRecords.length;
-   try{
-    const read=await call('readNote',{file:file.id});
-    if(page==='batch'&&selectedFile?.id===file.id)$('#previewBody').textContent=typeof read==='string'?read:read.content;
-   }catch(error){if(page==='batch'&&selectedFile?.id===file.id)showReadFailure(file,error);}
-  });$('#weekFiles').append(button);
- }
- const choose=document.createElement('button');choose.textContent='更换文件夹';choose.className='quiet-link';choose.onclick=safe(async()=>{if(await call('chooseNotes'))await batch();});$('#weekFiles').append(choose);
- if(selectedFile && files.some(file=>file.id===selectedFile.id))await $('#weekFiles').children[files.findIndex(file=>file.id===selectedFile.id)].onclick();
- showStep(noteRecords.length?step:1);
+ batch$('#previewBody').innerHTML=emptySource('选择一份文档预览','仅展示文字内容，不更改原文件。');
+ await loadImportDirectory();chooseImportKind(importKind);showStep(1);
 }
 function showStep(next){
- step=next;
+ step=next;if(page!=='batch'||pageViews.has('batch'))return;
+ closeBatchPopup();
  for(const [number,id] of [[1,'choosePanel'],[2,'confirmPanel'],[3,'reviewPanel']]){$('#'+id).hidden=next!==number;$('#step'+number).classList.toggle('active',next===number);if(number>1)$('#step'+number).disabled=!noteRecords.length;}
  if(next===2)renderBatchRows();
  if(next===3)reviewBatch();
 }
+let batchPopup=null,batchPopupAnchor=null;
+function closeBatchPopup(){batchPopup?.remove();batchPopup=null;batchPopupAnchor=null;}
+// 批量浮层与确认设计使用相同锚点定位，滚动或切步骤时关闭。
+function placeBatchPopup(anchor,panel){
+ closeBatchPopup();batchPopup=panel;batchPopupAnchor=anchor;document.body.append(panel);
+ const box=anchor.getBoundingClientRect(),height=panel.getBoundingClientRect().height;
+ panel.style.left=Math.max(8,Math.min(box.left,innerWidth-panel.offsetWidth-8))+'px';
+ panel.style.top=(box.bottom+height+8<innerHeight?box.bottom+5:Math.max(8,box.top-height-5))+'px';
+}
+function openBatchCalendar(anchor,row) {
+ let month=(row.day||snapshot.today).slice(0,7);
+ const panel=document.createElement('div');panel.className='row-calendar row-popover';panel.setAttribute('role','dialog');panel.setAttribute('aria-label','选择工作日期');
+ const commit=value=>{row.day=value;safe(async()=>{row.touched=true;rememberImportEdits();if(row.title.trim())await call('saveDraft',{record:row});closeBatchPopup();renderBatchRows();})();};
+ function paint(){
+  const [y,m]=month.split('-').map(Number),offset=(new Date(y,m-1,1).getDay()+6)%7,last=new Date(y,m,0).getDate();
+  panel.innerHTML='<header><h2>选择工作日期</h2><button type="button" class="calendar-close" aria-label="关闭日期选择">×</button></header><div class="calendar-nav"><button type="button" data-prev aria-label="上个月">‹</button><strong>'+y+'年'+m+'月</strong><button type="button" data-next aria-label="下个月" '+(month>=snapshot.today.slice(0,7)?'disabled':'')+'>›</button></div><div class="calendar-weekdays">'+['一','二','三','四','五','六','日'].map(label=>'<span>'+label+'</span>').join('')+'</div><div class="calendar-days">'+Array(offset).fill('<span></span>').join('')+Array.from({length:last},(_,i)=>{
+   const value=month+'-'+String(i+1).padStart(2,'0');return '<button type="button" data-date="'+value+'" aria-label="'+value+'" class="'+(value===row.day?'chosen':value===snapshot.today?'current':'')+'" '+(value>snapshot.today?'disabled':'')+'>'+(i+1)+'</button>';
+  }).join('')+'</div><div class="calendar-caption"><span>可选择其他月份</span><span>今天及以前</span></div><div class="calendar-actions"><button type="button" class="shortcut" data-today>今天</button><button type="button" class="shortcut" data-yesterday>昨天</button><button type="button" class="clear-date" data-clear>清除日期</button></div>';
+  panel.querySelector('.calendar-close').onclick=closeBatchPopup;
+  panel.querySelector('[data-prev]').onclick=()=>{month=new Date(y,m-2,1,12).toLocaleDateString('sv-SE').slice(0,7);paint();};
+  panel.querySelector('[data-next]').onclick=()=>{month=new Date(y,m,1,12).toLocaleDateString('sv-SE').slice(0,7);paint();};
+  panel.querySelectorAll('[data-date]').forEach(button=>button.onclick=()=>commit(button.dataset.date));
+  panel.querySelector('[data-today]').onclick=()=>commit(snapshot.today);panel.querySelector('[data-yesterday]').onclick=()=>commit(new Date(new Date(snapshot.today+'T12:00:00').getTime()-86400000).toLocaleDateString('sv-SE'));panel.querySelector('[data-clear]').onclick=()=>commit('');
+ }
+ paint();placeBatchPopup(anchor,panel);
+}
+function openBatchHours(anchor,row) {
+ const panel=document.createElement('div');panel.className='hours-options row-popover';panel.setAttribute('role','group');panel.setAttribute('aria-label','常用工时');
+ for(const value of [.5,1,1.5,2,2.5,3]){
+  const button=document.createElement('button');button.type='button';button.textContent=value+' h';button.setAttribute('aria-pressed',String(Number(row.hours)===value));
+  button.onclick=()=>{row.hours=value;row.touched=true;rememberImportEdits();safe(async()=>{if(row.title.trim())await call('saveDraft',{record:row});closeBatchPopup();renderBatchRows();})();};panel.append(button);
+ }
+ placeBatchPopup(anchor,panel);
+}
+
 function renderBatchRows(){
- $('#sourceName').textContent=selectedFile?.name || '';$('#recordCount').textContent=noteRecords.length+' 条记录';$('#editRows').replaceChildren();
+ $('#agentNotice').hidden=noteRecords.every(row=>{try{validateRecord(row,{today:snapshot.today});return true;}catch{return false;}});
+ $('#sourceName').textContent=importName();$('#recordCount').textContent=noteRecords.length+' 条记录';$('#editRows').replaceChildren();
  const groups=[...new Set(noteRecords.map(row=>row.day || ''))].sort((a,b)=>(a||'z').localeCompare(b||'z'));
  for(const day of groups){
   const records=noteRecords.filter(row=>(row.day||'')===day);const header=document.createElement('tr');header.className='date-group';header.dataset.day=day;
-  header.innerHTML='<td colspan="7"><strong>'+labelDay(day)+'</strong>　'+records.length+' 条　已填 '+records.reduce((sum,row)=>sum+Number(row.hours||0),0)+' h</td>';$('#editRows').append(header);
+  header.innerHTML='<td colspan="7"><strong>'+labelDay(day)+'</strong><span class="group-detail">'+records.length+' 条 · 已填 '+records.reduce((sum,row)=>sum+Number(row.hours||0),0)+' h</span></td>';$('#editRows').append(header);
   for(const row of records){
-   const tr=document.createElement('tr');const index=noteRecords.indexOf(row);
-   tr.innerHTML='<td>'+String(index+1).padStart(2,'0')+'</td><td><input data-field="title" aria-label="工作事项" value="'+escapeText(row.title)+'"></td><td><button class="date-picker" data-day aria-label="选择工作日期"><svg><use href="#calendar"/></svg><span>'+labelDay(row.day)+'</span><svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button></td><td><input data-field="hours" aria-label="工时" type="number" step="0.5" min="0.5" value="'+escapeText(row.hours)+'" placeholder="待填"></td><td><select data-field="type" aria-label="工时类型"><option value="">选择工时类型</option>'+types.map(type=>'<option '+(row.type===type?'selected':'')+'>'+escapeText(type)+'</option>').join('')+'</select></td><td><div style="position:relative"><input aria-label="关联工单" data-issue value="'+escapeText(row.issue || row.issueQuery)+'" placeholder="输入工单号"></div></td><td><span data-task>'+escapeText(row.task || '选择工时类型')+'</span></td>';
-   const save=async()=>{row.touched=true;await call('saveDraft',{record:row});};
+   const tr=document.createElement('tr');tr.dataset.row=row.id;const index=noteRecords.indexOf(row);
+   tr.innerHTML='<td class="number-cell">'+String(index+1).padStart(2,'0')+'</td><td><input data-field="title" aria-label="工作事项" value="'+escapeText(row.title)+'"></td><td><button class="date-picker" data-day aria-label="选择工作日期"><svg><use href="#calendar"/></svg><span>'+(row.day?labelDay(row.day):'选择日期')+'</span><svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button></td><td><input data-field="hours" aria-label="工时" type="number" step="0.5" min="0.5" value="'+escapeText(row.hours)+'" placeholder="待填"></td><td><select data-field="type" aria-label="工时类型"><option value="">选择工时类型</option>'+types.map(type=>'<option '+(row.type===type?'selected':'')+'>'+escapeText(type)+'</option>').join('')+'</select></td><td><div style="position:relative"><input aria-label="关联工单" data-issue value="'+escapeText(row.issue || row.issueQuery)+'" placeholder="输入工单号"></div></td><td><span data-task>'+escapeText(row.task || '选择工时类型')+'</span></td>';
+   const save=async()=>{row.touched=true;rememberImportEdits();if(row.title.trim())await call('saveDraft',{record:row});};
    const markMissing=()=>{
-    tr.querySelector('[data-field=hours]').classList.toggle('missing',row.hours==='' || row.hours==null);
-    tr.querySelector('[data-field=type]').classList.toggle('missing',!row.type);
-    tr.querySelector('[data-issue]').classList.toggle('missing',!row.issue && !monthlyTasks.includes(row.task));
-    tr.querySelector('[data-day]').classList.toggle('missing',!row.day);
+    const invalidHours=row.hours===''||row.hours==null?'原文未提供':Number(row.hours)<.5?'至少0.5h':Number(row.hours)*2%1!==0?'0.5h倍数':'';
+    for(const [selector,hint] of [['[data-field=title]',row.title.trim()?'':'请填写工作事项'],['[data-field=hours]',invalidHours],['[data-field=type]',row.type?'':'请选择工时类型'],['[data-day]',!row.day?'原文未提供':row.day>snapshot.today?'请选择今天及以前':'']]){
+     const input=tr.querySelector(selector);
+     // 已填但不符合0.5h步长的值保留原文，以红边区别于仍待补的空值。
+     const invalid=selector==='[data-field=hours]'&&Boolean(hint)&&row.hours!==''&&row.hours!=null;
+     input.classList.toggle('missing',Boolean(hint)&&!invalid);input.classList.toggle('invalid',invalid);
+     let label=input.nextElementSibling;if(!label?.classList.contains('cell-hint')){label=document.createElement('div');label.className='cell-hint';input.after(label);}label.textContent=hint;
+    }
+    tr.querySelector('[data-issue]').classList.toggle('missing',!row.issue&&!monthlyTasks.includes(row.task));
    };
-   if(row.hours==='' || row.hours==null){
-    const hint=document.createElement('div');hint.className='cell-hint';hint.textContent='原文未提供';tr.querySelector('[data-field=hours]').after(hint);
-   }
    markMissing();
 
    tr.querySelectorAll('[data-field]').forEach(input=>input.onchange=safe(async()=>{
@@ -362,7 +443,7 @@ function renderBatchRows(){
     if(input.dataset.field==='type'){
      row.task=taskForType(row.type,hadRequirement);
      if(monthlyTasks.includes(row.task)){row.issue='';row.issueTitle='';row.issueQuery='';}
-     tr.querySelector('[data-task]').textContent=row.task || '';
+     tr.querySelector('[data-task]').textContent=row.task || '选择工时类型';
      const issueInput=tr.querySelector('[data-issue]'),optional=Boolean(requirementTasks[row.type]);
      issueInput.readOnly=monthlyTasks.includes(row.task)&&!optional;
      issueInput.value=issueInput.readOnly?(row.day?.slice(0,7)||'对应月份')+' 综合工时单':row.issue || row.issueQuery || '';
@@ -371,9 +452,10 @@ function renderBatchRows(){
     }
     await save();markMissing();updateBatchTotals();
    }));
-   tr.querySelector('[data-day]').onclick=()=>calendar(tr.querySelector('[data-day]'),row.day,day=>{row.day=day;safe(async()=>{await save();renderBatchRows();})()},sourceWeekRange());
-   const hours=tr.querySelector('[data-field=hours]');hours.addEventListener('blur',updateBatchTotals);hours.onfocus=()=>hourOptions(hours,value=>{hours.value=value;hours.dispatchEvent(new Event('change'));});
+   tr.querySelector('[data-day]').onclick=()=>openBatchCalendar(tr.querySelector('[data-day]'),row);
+   const hours=tr.querySelector('[data-field=hours]');hours.addEventListener('blur',updateBatchTotals);hours.onfocus=()=>setTimeout(()=>{if(document.activeElement===hours&&document.contains(hours))openBatchHours(hours,row);},0);hours.onclick=()=>openBatchHours(hours,row);
    const input=tr.querySelector('[data-issue]');
+   if(row.issueTitle){const title=document.createElement('div');title.className='issue-title';title.textContent=row.issueTitle;input.parentElement.append(title);}
    const optional=Boolean(requirementTasks[row.type]);
    if(monthlyTasks.includes(row.task)){
     input.readOnly=!optional;input.value=optional?'':(row.day?.slice(0,7)||'对应月份')+' 综合工时单';
@@ -385,7 +467,7 @@ function renderBatchRows(){
     markMissing();safe(save)();updateBatchTotals();if(step===3)reviewBatch();
    },()=>{
     // Keep an unfinished query when the user returns from confirmation, so it remains selectable or clearable.
-    row.issue='';row.issueTitle='';row.issueQuery=input.value;row.task=taskForType(row.type,Boolean(input.value.trim()));tr.querySelector('[data-task]').textContent=row.task || '';
+    row.issue='';row.issueTitle='';row.issueQuery=input.value;row.task=taskForType(row.type,Boolean(input.value.trim()));tr.querySelector('[data-task]').textContent=row.task || '选择工时类型';
     markMissing();safe(save)();updateBatchTotals();
    });
    $('#editRows').append(tr);
@@ -394,34 +476,31 @@ function renderBatchRows(){
  updateBatchTotals();
 }
 function reviewBatch(){
- $('#reviewFile').textContent=selectedFile?.name || '';
- $('#weekTotal').textContent=noteRecords.filter(row=>row.day).reduce((sum,row)=>sum+Number(row.hours||0),0)+' h';
+ const hours=rows=>rows.reduce((sum,row)=>sum+(Number(row.hours)||0),0);
+ const dated=noteRecords.filter(row=>row.day),undated=noteRecords.filter(row=>!row.day);
  const incomplete=noteRecords.filter(row=>{try{validateRecord(row,{today:snapshot.today});return !types.includes(row.type);}catch{return true;}});
- $('#weekPending').textContent=incomplete.length?'待补 '+incomplete.length+' 条':'';
- $('#weekRange').textContent='';
- $('#reviewRows').innerHTML=[...new Set(noteRecords.map(row=>row.day||''))].sort().map(day=>{
- const rows=noteRecords.filter(row=>(row.day||'')===day);return '<tr><td>'+labelDay(day)+'</td><td>'+rows.length+' 条</td><td>'+rows.reduce((sum,row)=>sum+Number(row.hours||0),0)+' h</td><td>'+rows.filter(row=>incomplete.includes(row)).length+' 处</td></tr>';
+ $('#reviewFile').textContent=importName();$('#weekTotal').innerHTML=hours(dated)+'<small> h</small>';
+ $('#weekPending').textContent=undated.length?'另有 '+hours(undated)+' h 待确定日期':'';
+ const dates=[...new Set(dated.map(row=>row.day))].sort();
+ $('#weekRange').textContent=dates.length?dates[0].replaceAll('-','.')+' — '+dates.at(-1).replaceAll('-','.'): '日期待补齐';
+ $('#weekRange').parentElement.classList.add('summary-range');
+ $('#reviewRows').innerHTML=[...new Set(noteRecords.map(row=>row.day||''))].sort((a,b)=>(a||'z').localeCompare(b||'z')).map(day=>{
+  const rows=noteRecords.filter(row=>(row.day||'')===day),pending=rows.some(row=>incomplete.includes(row));
+  const hints=[...new Set(rows.flatMap(row=>[!row.title.trim()&&'事项',!row.day&&'日期',(row.hours===''||row.hours==null||Number(row.hours)<.5||Number(row.hours)*2%1!==0)&&'工时',!row.type&&'类型',!row.issue&&!monthlyTasks.includes(row.task)&&'工单'].filter(Boolean)))];
+  return '<tr data-day="'+escapeText(day)+'"><td>'+labelDay(day)+'</td><td>'+rows.length+' 条</td><td>'+hours(rows)+' h</td><td class="'+(pending?'pending':'ready')+'">'+(pending?(hints.join('、')||'请检查字段'):'已齐全')+'</td></tr>';
  }).join('');
- $('#reviewStatus').textContent=incomplete.length?'请返回填报补齐后提交':'已可提交';
+ $('#reviewStatus').className='confirm-summary '+(incomplete.length?'needs':'success');
+ $('#reviewStatus').textContent=incomplete.length?'待补 '+incomplete.length+' 条，请返回填报':'字段已齐全，可提交';
  setSubmissionButton(noteRecords);if(incomplete.length&&!currentBatch())$('#submit').disabled=true;
-}
-// A chosen source week constrains row calendars; an undated file gets its range from the first explicit work date.
-function sourceWeekRange() {
- const known=selectedFile?.weekStart || noteRecords.find(row=>row.day)?.day;
- if(!known)return {max:snapshot.today};
- const monday=new Date(known+'T12:00:00');monday.setDate(monday.getDate()-(monday.getDay()+6)%7);
- const sunday=new Date(monday);sunday.setDate(sunday.getDate()+6);
- const min=monday.toLocaleDateString('sv-SE'),end=sunday.toLocaleDateString('sv-SE');
- return {min,max:end<snapshot.today?end:snapshot.today};
 }
 function updateBatchTotals() {
  if(page!=='batch'||!$('#editRows'))return;
  for(const header of document.querySelectorAll('#editRows .date-group')){
   const rows=noteRecords.filter(row=>(row.day||'')===header.dataset.day);
-  header.firstElementChild.innerHTML='<strong>'+escapeText(labelDay(header.dataset.day))+'</strong>　'+rows.length+' 条　已填 '+rows.reduce((sum,row)=>sum+(Number(row.hours)||0),0)+' h';
+  header.firstElementChild.innerHTML='<strong>'+escapeText(labelDay(header.dataset.day))+'</strong><span class="group-detail">'+rows.length+' 条 · 已填 '+rows.reduce((sum,row)=>sum+(Number(row.hours)||0),0)+' h</span>';
  }
  const pending=noteRecords.filter(row=>{try{validateRecord(row,{today:snapshot.today});return false;}catch{return true;}}).length;
- $('#summary').textContent='已填 '+noteRecords.reduce((sum,row)=>sum+(Number(row.hours)||0),0)+' h'+(pending?'　待补 '+pending+' 条':'');
+ $('#summary').innerHTML='<span>已填 <strong>'+noteRecords.reduce((sum,row)=>sum+(Number(row.hours)||0),0)+' h</strong></span>'+(pending?'<span class="needs">待补 '+pending+' 条</span>':'<span class="success">字段已齐全</span>');
 }
 async function submitRecords(records){
  const existing=currentBatch();
@@ -430,23 +509,36 @@ async function submitRecords(records){
   activeBatch=existing.id;await showBatch(await call('getBatch',{id:existing.id}),{open:true});return;
  }
  const valid=records.filter(row=>{try{validateRecord(row,{today:snapshot.today});return types.includes(row.type);}catch{return false;}});
- if(!valid.length)throw new Error('请先补齐待提交事项');
- const batch=await call('startSubmission',{records:valid});activeBatch=batch.id;rememberBatch(batch);await showBatch(batch,{open:true});
+ if(!valid.length || (page==='batch'&&valid.length!==records.length))throw new Error('请先补齐待提交事项');
+ // 首次提交中旧ID记录可能只带sourceFile；本次请求来源是确切证据，不改写旧记录元数据。
+ const requestedSource=sourceKey();
+ const batch=await call('startSubmission',{records:valid});activeBatch=batch.id;rememberBatch(batch);submissionBatches.set(requestedSource,batch);await showBatch(batch,{open:true});
  if(page==='daily')setSubmissionButton(snapshot.state.drafts.filter(row=>row.source!=='批量填报'));
  if(page==='batch')setSubmissionButton(noteRecords);
 }
 async function restoreUnfinished(batch) {
  await call('returnToDrafts',{batchId:batch.id});
- releasedBatches.add(batch.id);submissionBatches.delete(batchSource(batch));
+ releasedBatches.add(batch.id);for(const [key,known] of submissionBatches)if(known.id===batch.id)submissionBatches.delete(key);
  drawerDesiredOpen=false;$('#submissionView').close();activeBatch=null;
  const origin=batchSource(batch).startsWith('batch/')?'batch':'daily';
  await navigate(origin);
  if(origin==='batch'){
   const ids=new Set(batch.items.filter(item=>!isCompletedItem(item)).map(item=>item.id));
   noteRecords=snapshot.state.drafts.filter(row=>ids.has(row.id));
-  const source=noteRecords[0]?.sourceFile;
-  if(source)selectedFile={...(selectedFile||{}),id:source,name:selectedFile?.id===source?selectedFile.name:source};
-  showStep(2);
+  const record=noteRecords[0];
+  // 历史恢复只使用该批次的原来源。旧记录没有新来源编号，不能继承别的文档预览或粘贴身份。
+  filePreview=null;pasteResult=null;previewFailed=false;
+  importSource=record?.importSourceId?{id:record.importSourceId,kind:record.sourceKind,name:record.sourceName,contentHash:record.sourceHash,fileName:record.sourceFile}:null;
+  importKind=importSource?.kind||'file';
+  selectedFile=record?.sourceFile?{id:record.sourceFile,name:record.sourceName||record.sourceFile}:null;
+  if(importKind==='paste')pasteResult={source:importSource};
+  clearReadFeedback();$('#pasteInput').value='';$('#pasteCount').textContent='0 字';
+  $('#previewName').textContent='';$('#previewBody').innerHTML=emptySource('选择一份文档预览','仅展示文字内容，不更改原文件。');
+  for(const [kind,id] of [['file','local'],['paste','paste']]){
+   $('#'+id+'Tab').classList.toggle('selected',kind===importKind);$('#'+id+'Tab').setAttribute('aria-selected',String(kind===importKind));$('#'+id+'Source').hidden=kind!==importKind;
+  }
+  document.querySelectorAll('.week-file').forEach(button=>{button.classList.remove('selected');button.setAttribute('aria-pressed','false');});
+  updateImportControls();showStep(2);
  }
 }
 async function showBatch(batch,{open=false}={}){
@@ -595,3 +687,7 @@ async function settings(){
 // The editor owns Escape even after a calendar rerender moves focus to body; its cancel handler must see the open picker first.
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.querySelector('.record-editor[open]')){document.querySelector('.date-popover')?.remove();document.querySelector('.hours-popover')?.remove();}});
 navigate('daily').catch(error=>{main.innerHTML='<header class="topbar"><h1>JIRA工时填报</h1></header><p>'+escapeText(error.message)+'</p><button id="retryLoad">重新打开</button>';$('#retryLoad').onclick=()=>location.reload();});
+
+window.addEventListener('keydown',event=>{if(event.key==='Escape')closeBatchPopup();});
+document.addEventListener('pointerdown',event=>{if(batchPopup&&!batchPopup.contains(event.target)&&!batchPopupAnchor?.contains(event.target))closeBatchPopup();});
+document.addEventListener('scroll',event=>{if(batchPopup&&!batchPopup.contains(event.target))closeBatchPopup();},true);

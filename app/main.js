@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {access} from 'node:fs/promises';
 import {Store} from './store.js';
 import {Secrets} from './secrets.js';
-import {WeekNotes} from './week-notes.js';
+import {DocumentDirectory} from './documents.js';
 import {JiraClient} from './jira.js';
 import {SubmissionService} from './submission.js';
 import {AgentService} from './agent.js';
@@ -33,7 +33,7 @@ const service=new WorkbenchService({
   trustedModelOrigins:siteDefaults.trustedModelOrigins,
   createJira: config=>new JiraClient(config),
   createSubmission: jira=>new SubmissionService({store,jira,onUpdate:batch=>window?.webContents.send('workbench:update',batch)}),
-  notesFactory: directory=>new WeekNotes({directory}),
+  documentsFactory: directory=>new DocumentDirectory({directory}),
   chooseDirectory: async()=>{
     const selected=await dialog.showOpenDialog(window,{properties:['openDirectory']});
     return selected.canceled ? null : selected.filePaths[0];
