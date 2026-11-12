@@ -1,0 +1,110 @@
+name: 手动构建 Release 附件
+
+# 只在手动发布时运行，向已有草稿上传附件；正式发布由核对附件后执行。
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 已创建的 Release 草稿标签
+        required: true
+        default: v0.1.0
+      source_ref:
+        description: 需要打包的源码提交或分支
+        required: true
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: 核对发布草稿及版本
+        run: |
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          test "$RELEASE_TAG" = "v$(node -p "require('./package.json').version")"
+      - run: npm ci
+      - name: 执行现有自动测试
+        run: npm test
+      - name: 使用现有脚本打包三平台
+        run: |
+          npm run package:mac
+          npm run package:mac:intel
+          npm run package:win
+      - name: 核对源码、架构及公开范围
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import crypto from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          import assert from 'node:assert/strict';
+          import * as asar from '@electron/asar';
+
+          const pkg=JSON.parse(fs.readFileSync('package.json'));
+          const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
+          const sourceFiles={};
+          function collect(directory){
+            for(const entry of fs.readdirSync(directory,{withFileTypes:true})){
+              const file=path.join(directory,entry.name);
+              if(entry.isDirectory())collect(file);
+              else sourceFiles[file]=hash(fs.readFileSync(file));
+            }
+          }
+          collect('app');
+          const artifacts=[];
+          fs.mkdirSync('release-assets');
+          for(const [platform,arch,label] of [['darwin','arm64','macOS-arm64'],['darwin','x64','macOS-x64'],['win32','x64','Windows-x64']]){
+            const folder='dist/JIRA工时填报-'+platform+'-'+arch;
+            const resources=platform==='darwin'?folder+'/JIRA工时填报.app/Contents/Resources':folder+'/resources';
+            const archive=resources+'/app.asar';
+            // 逐文件绑定当前源码，并排除私有配置及用户数据，防止把本机部署包公开。
+            assert.equal(asar.listPackage(archive).some(file=>/(^|\/)(site-defaults\.local\.json|settings\.json|personal-todos\.json|credentials|workspaces|\.git|\.env)(\/|$)/.test(file)),false);
+            for(const [file,digest] of Object.entries(sourceFiles))assert.equal(hash(asar.extractFile(archive,file)),digest,file);
+            assert.equal(JSON.parse(asar.extractFile(archive,'package.json')).version,pkg.version);
+            const executable=platform==='darwin'?folder+'/JIRA工时填报.app/Contents/MacOS/JIRA工时填报':folder+'/JIRA工时填报.exe';
+            const binary=fs.readFileSync(executable);
+            if(platform==='darwin'){
+              assert.equal(binary.readUInt32LE(0),0xfeedfacf);
+              assert.equal(binary.readUInt32LE(4),arch==='arm64'?0x100000c:0x1000007);
+              assert.equal(hash(fs.readFileSync(resources+'/electron.icns')),hash(fs.readFileSync('assets/branding/app-icon.icns')));
+            }else{
+              const header=binary.readUInt32LE(0x3c);
+              assert.equal(binary.readUInt32LE(header),0x4550);
+              assert.equal(binary.readUInt16LE(header+4),0x8664);
+            }
+            const name='JIRAWorkReport-v'+pkg.version+'-'+label+'.zip';
+            fs.copyFileSync(folder+'.zip','release-assets/'+name);
+            artifacts.push({name,platform,arch,bytes:fs.statSync(folder+'.zip').size,sha256:hash(fs.readFileSync(folder+'.zip')),asarSHA256:hash(fs.readFileSync(archive))});
+          }
+          assert.equal(new Set(artifacts.map(item=>item.asarSHA256)).size,1);
+          const report={sourceCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),version:pkg.version,electronVersion:pkg.devDependencies.electron,sourceFiles,artifacts};
+          fs.writeFileSync('release-assets/BUILD-INFO.json',JSON.stringify(report,null,2)+'\n');
+          console.log(JSON.stringify(report,null,2));
+          JS
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          for file in Path('release-assets').glob('*.zip'):
+              with ZipFile(file) as archive:
+                  assert archive.testzip() is None, file
+                  if 'Windows' in file.name:
+                      assert all(item.flag_bits & 0x800 for item in archive.infolist() if not item.filename.isascii()), file
+          PY
+          (cd release-assets && shasum -a 256 *.zip > SHA256SUMS.txt)
+      - name: 上传到已有 Release 草稿
+        run: gh release upload "$RELEASE_TAG" release-assets/*.zip release-assets/SHA256SUMS.txt release-assets/BUILD-INFO.json --clobber

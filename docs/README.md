@@ -17,6 +17,7 @@
 - [Agent 接入](../app/agent.js)：调用 CLI 生成工时类型及子任务建议。
 - [自动测试](../tests/)：使用虚构账号、工单和受控接口验证业务行为。
 - [打包脚本](../scripts/package.mjs)：生成 macOS 和 Windows 应用及 ZIP。
+- [手动 Release 构建](../.github/workflows/release.yml)：手动指定源码提交和已有 Release 草稿，执行测试、生成三平台 ZIP，核对源码、架构和公开范围后上传附件；核对完成后再正式发布。
 
 ## 公开范围
 
