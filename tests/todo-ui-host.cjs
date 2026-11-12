@@ -43,13 +43,15 @@ app.whenReady().then(async()=>{
   }finally{await fs.chmod(directory,0o700);}
   await run("document.querySelector('#todoForm').requestSubmit()");
   await wait("document.querySelector('#todoEditor').hidden");
-  await run("document.querySelector('#closeDrawer').click();document.querySelector('#statusFilter').value='已完成';document.querySelector('#statusFilter').dispatchEvent(new Event('change'));document.querySelector('#sortRule').value='due-asc';document.querySelector('#sortRule').dispatchEvent(new Event('change'));document.querySelector('#filterTrigger').click();document.querySelector('#priorityFilter').value='unset';document.querySelector('#dateMode').value='undated';document.querySelector('#filterForm').requestSubmit();document.querySelector('[data-page=daily]').click()");
+  await run("document.querySelector('#closeDrawer').click();document.querySelector('#statusFilter').value='已完成';document.querySelector('#statusFilter').dispatchEvent(new Event('change'));document.querySelector('#sortRule').value='due-asc';document.querySelector('#sortRule').dispatchEvent(new Event('change'));document.querySelector('#filterTrigger').click();document.querySelector('#priorityFilter').value='unset';document.querySelector('#dateMode').value='undated';document.querySelector('#filterForm').requestSubmit();document.querySelector('#collapseGroups').click();document.querySelector('[data-page=daily]').click()");
   await wait("Boolean(document.querySelector('#issue'))");
   await run("document.querySelector('[data-page=todo]').click()");
   await wait("Boolean(document.querySelector('#newTodo')) && !document.querySelector('#newTodo').disabled");
  }else{
   await wait("document.querySelector('.todo-table').textContent.includes('真实保存与重开')");
  }
+ assert.equal(await run("document.querySelector('#groupSidebar').hidden"),true,'分组栏收起状态应跨页面和重启恢复');
+ assert.equal(await run("document.querySelector('#clearConditions')===null"),true,'设置查询后列表上方不应出现清除条件按钮');
  assert.deepEqual(await run("[document.querySelector('#statusFilter').value,document.querySelector('#sortRule').value]"),['已完成','due-asc']);
  await run("document.querySelector('#filterTrigger').click()");
  assert.deepEqual(await run("[document.querySelector('#priorityFilter').value,document.querySelector('#dateMode').value]"),['unset','undated']);

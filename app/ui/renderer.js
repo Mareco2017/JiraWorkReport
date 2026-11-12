@@ -65,30 +65,36 @@ async function call(name,payload={}){
  if(!response.ok)throw Object.assign(new Error(response.error),{code:response.code,field:response.field});
  return response.value;
 }
+// 连接行与状态点常驻；刷新业务快照时仅更新真正改变的文字和状态。
+function updateConnection(row,label,configured){
+ if(row.lastChild.nodeValue!==label)row.lastChild.nodeValue=label;
+ const className='status-value '+(configured?'status-good':'status-idle');
+ if(row.className!==className)row.className=className;
+}
 async function refresh(){
  snapshot=await call('initialize');
  const liveTypes=snapshot.config.jira?.typeNames;
  types=Array.isArray(liveTypes)?Object.keys(typeMapping).filter(name=>liveTypes.includes(name)):Object.keys(typeMapping);
  for(const batch of snapshot.state.batches || [])rememberBatch(batch);
  const rows=document.querySelectorAll('.status-value');
- rows[0].innerHTML='<i></i>'+escapeText(snapshot.config.jira ? snapshot.config.jira.username : '未配置');
- rows[1].innerHTML='<i></i>'+escapeText(snapshot.config.agent?.engine || '未配置');
- rows[0].className='status-value '+(snapshot.config.jira?'status-good':'status-idle');
- rows[1].className='status-value '+(snapshot.config.agent?'status-good':'status-idle');
+ updateConnection(rows[0],snapshot.config.jira?snapshot.config.jira.username:'未配置',Boolean(snapshot.config.jira));
+ updateConnection(rows[1],snapshot.config.agent?snapshot.config.agent.engine:'未配置',Boolean(snapshot.config.agent));
  const dailyNav=$('[data-page=daily]');
  let draftBadge=dailyNav.querySelector('.badge');
  if(!draftBadge){draftBadge=document.createElement('span');draftBadge.className='badge';dailyNav.append(draftBadge);}
  const dailyCount=snapshot.state.drafts.filter(row=>row.source!=='批量填报').length;
- draftBadge.hidden=!dailyCount;draftBadge.textContent=dailyCount;
+ if(draftBadge.hidden!==!dailyCount)draftBadge.hidden=!dailyCount;
+ if(draftBadge.textContent!==String(dailyCount))draftBadge.textContent=dailyCount;
  const todayRows=(snapshot.state.drafts || []).filter(row=>row.day===snapshot.today);
- rows[2].textContent=todayRows.length+' 条 · '+todayRows.reduce((sum,row)=>sum+Number(row.hours||0),0)+' h';
+ const todayText=todayRows.length+' 条 · '+todayRows.reduce((sum,row)=>sum+Number(row.hours||0),0)+' h';
+ if(rows[2].textContent!==todayText)rows[2].textContent=todayText;
 }
 const safe = action=>async event=>{try{await action(event);}catch(error){toast(error.message);}};
 document.querySelectorAll('[data-page]').forEach(button=>button.onclick=safe(()=>navigate(button.dataset.page)));
 async function navigate(next){
+ if(next===page&&main.children.length)return;
  disposeTodo?.();disposeTodo=null;
  main.classList.remove('todo-host');
- document.querySelector('#todayCount').closest('.status-row').hidden=false;
  closeBatchPopup();
  if(['daily','batch'].includes(page) && main.children.length){
   const view=document.createDocumentFragment();
@@ -102,9 +108,11 @@ async function navigate(next){
   document.querySelectorAll('[data-page]').forEach(button=>button.classList.toggle('active',button.dataset.page===page));
   $('#pageStyle').disabled=true;$('#historyStyle').disabled=true;
   main.classList.add('todo-host');
-  $('#todayCount').closest('.status-row').hidden=true;
-  disposeTodo=mountTodo(main,{call,onCount:count=>{
-   const badge=$('#todoNavCount');badge.hidden=false;badge.textContent=count===null?'—':count;
+  disposeTodo=mountTodo(main,{call,onCount:(count,{loading=false}={})=>{
+   if(loading)return;
+   const badge=$('#todoNavCount'),text=count===null?'—':String(count);
+   if(badge.hidden)badge.hidden=false;
+   if(badge.textContent!==text)badge.textContent=text;
   }});
   return;
  }
@@ -706,7 +714,7 @@ window.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.que
 navigate('todo').catch(error=>{main.innerHTML='<header class="topbar"><h1>JIRA工时填报</h1></header><p>'+escapeText(error.message)+'</p><button id="retryLoad">重新打开</button>';$('#retryLoad').onclick=()=>location.reload();});
 
 // 启动直接展示待办；宿主连接摘要仍读取既有本机配置，不阻塞待办入口。
-refresh().catch(()=>{document.querySelectorAll('.status-value').forEach((row,index)=>{if(index<2)row.textContent='暂不可用';});});
+refresh().catch(()=>{document.querySelectorAll('.status-value').forEach((row,index)=>{if(index<2)updateConnection(row,'暂不可用',false);});});
 
 window.addEventListener('keydown',event=>{if(event.key==='Escape')closeBatchPopup();});
 document.addEventListener('pointerdown',event=>{if(batchPopup&&!batchPopup.contains(event.target)&&!batchPopupAnchor?.contains(event.target))closeBatchPopup();});

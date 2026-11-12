@@ -19,6 +19,7 @@ function restorePreferences() {
   try {
     const saved = JSON.parse(localStorage.getItem(preferenceKey));
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return;
+    if (typeof saved.collapsed==='boolean') collapsed=saved.collapsed;
     for (const [field, selectId] of Object.entries({status:'statusFilter',sort:'sortRule',priority:'priorityFilter',dateMode:'dateMode'})) {
       if ([...$('#'+selectId).options].some(option=>option.value===saved[field])) query[field]=saved[field];
     }
@@ -29,7 +30,7 @@ function restorePreferences() {
   } catch { /* 无法读取偏好时仍可使用默认查询，不影响事项文件。 */ }
 }
 function rememberPreferences() {
-  try { localStorage.setItem(preferenceKey,JSON.stringify(Object.fromEntries(['status','sort','priority','dateMode','from','to'].map(field=>[field,query[field]])))); }
+  try { localStorage.setItem(preferenceKey,JSON.stringify({...Object.fromEntries(['status','sort','priority','dateMode','from','to'].map(field=>[field,query[field]])),collapsed})); }
   catch { showToast('查看条件未能保存，下次进入可能恢复默认条件。'); }
 }
 restorePreferences();
@@ -126,7 +127,7 @@ function isInCurrentView(todo) {
 
 function render() {
   const unavailable = scene !== 'normal';
-  onCount(unavailable ? null : data.todos.filter(todo => todo.status !== '已完成').length);
+  onCount(unavailable ? null : data.todos.filter(todo => todo.status !== '已完成').length,{loading:scene==='loading'});
   $('#currentGroupTitle').textContent = currentGroup ? groupName(currentGroup) : '全部';
   $('#currentGroupTitle').title = $('#currentGroupTitle').textContent;
   $('#groupTotal').textContent = unavailable ? '' : data.todos.filter(todo => !currentGroup || todo.groupId === currentGroup).length + ' 项';
@@ -150,7 +151,6 @@ function render() {
   $('#filterTrigger').classList.toggle('has-filters', filterCount > 0);
   $('#filterCount').hidden = !filterCount;
   $('#filterCount').textContent = filterCount;
-  $('#clearConditions').hidden = !hasConditions();
   ['newTodo', 'addGroup', 'manageGroups', 'statusTrigger', 'sortTrigger', 'statusFilter', 'sortRule', 'filterTrigger', 'searchTrigger', 'keyword'].forEach(id => { $('#' + id).disabled = unavailable; });
   renderGroups(unavailable);
   renderContent();
@@ -362,6 +362,7 @@ function stateContent(title, text, iconName) {
 }
 
 function renderContent() {
+  $('.result-bar').hidden = view === 'calendar';
   const area = $('#contentArea');
   area.replaceChildren();
   area.setAttribute('aria-busy', String(scene === 'loading'));
@@ -457,7 +458,6 @@ function renderCalendar(visible) {
   next.type = 'button'; next.setAttribute('aria-label', '下一个月'); next.append(icon('chevron'));
   next.addEventListener('click', () => changeMonth(1));
   arrows.append(prev, next); nav.append(today, arrows); toolbar.append(heading, nav); page.append(toolbar);
-  if (!dated.length) page.append(element('p', 'calendar-empty-note', hasConditions() ? '本月没有符合条件的有日期待办，可调整条件或切换月份。' : '本月暂时没有设置截止日期的待办。'));
   const calendar = element('div', 'month-calendar');
   calendar.setAttribute('aria-label', month.getFullYear() + '年' + (month.getMonth() + 1) + '月待办日历');
   const weekdays = element('div', 'week-head');
@@ -493,6 +493,7 @@ function renderCalendar(visible) {
     grid.append(cell);
   }
   calendar.append(weekdays, grid); page.append(calendar);
+  if (!dated.length) page.append(element('p', 'calendar-empty-note', hasConditions() ? '本月没有符合条件的有日期待办，可调整条件或切换月份。' : '本月暂时没有设置截止日期的待办。'));
   const legend = element('div', 'calendar-legend');
   statuses.forEach(status => { const item = element('span', 'legend-item ' + statusClass(status)); item.append(element('i'), document.createTextNode(status)); legend.append(item); });
   page.append(legend);
@@ -808,14 +809,13 @@ $('#statusTrigger').addEventListener('click',()=>openQueryMenu('statusFilter','s
 $('#sortTrigger').addEventListener('click',()=>openQueryMenu('sortRule','sortTrigger'));
 $('#searchTrigger').addEventListener('click',()=>{searchExpanded=true;render();$('#keyword').focus();$('#keyword').select();});
 $('#closeSearch').addEventListener('click',()=>{searchExpanded=false;render();$('#searchTrigger').focus();});
-$('#collapseGroups').addEventListener('click',()=>{collapsed=true;render();$('#expandGroups').focus();});
-$('#expandGroups').addEventListener('click',()=>{collapsed=false;render();$('#collapseGroups').focus();});
+$('#collapseGroups').addEventListener('click',()=>{collapsed=true;rememberPreferences();render();$('#expandGroups').focus();});
+$('#expandGroups').addEventListener('click',()=>{collapsed=false;rememberPreferences();render();$('#collapseGroups').focus();});
 $('#listView').addEventListener('click',()=>{view='list';render();});
 $('#calendarView').addEventListener('click',()=>{view='calendar';render();});
 $('#statusFilter').addEventListener('change',event=>{query.status=event.target.value;rememberPreferences();render();});
 $('#sortRule').addEventListener('change',event=>{query.sort=event.target.value;rememberPreferences();render();});
 $('#keyword').addEventListener('input',event=>{query.keyword=event.target.value;render();});
-$('#clearConditions').addEventListener('click',clearConditions);
 $('#filterTrigger').addEventListener('click',openFilters);
 $('#closeDrawer').addEventListener('click',()=>{closeDrawer();renderContent();});
 $('#drawerBackdrop').addEventListener('click',()=>{closeDrawer();renderContent();});

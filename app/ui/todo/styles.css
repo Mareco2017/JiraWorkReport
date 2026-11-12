@@ -410,3 +410,12 @@
 @media(max-width:1100px) {.todo-product .todo-calendar-view .month-value {font-size:16px;}}
 /* 待办提示由hidden管理，不能继承宿主依赖visible类的display:none。 */
 .todo-product .toast {display:block;}
+
+/* 日历分割线到导航行、概览到网格均为20px；不叠加列表结果栏占位。 */
+.todo-product .todo-calendar-view {padding-top:20px;}
+.todo-product .todo-calendar-view .calendar-toolbar {display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"month nav" "summary summary";gap:8px 20px;min-height:0;padding:0 0 20px;}
+.todo-product .todo-calendar-view .month-heading {display:contents;}
+.todo-product .todo-calendar-view .calendar-month {grid-area:month;}
+.todo-product .todo-calendar-view .month-navigation {grid-area:nav;}
+.todo-product .todo-calendar-view .month-summary {grid-area:summary;margin:0;}
+.todo-product .todo-calendar-view .calendar-empty-note {margin:14px 0 0;}
