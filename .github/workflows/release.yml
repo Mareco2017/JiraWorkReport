@@ -38,6 +38,9 @@ jobs:
           test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
           test "$RELEASE_TAG" = "v$(node -p "require('./package.json').version")"
       - run: npm ci
+      # Electron 45按需安装；先单独完成安装，避免并行界面测试同时解压同一运行时。
+      - name: 完成 Electron 运行时安装
+        run: node node_modules/electron/install.js
       - name: 执行现有自动测试
         run: npm test
       - name: 使用现有脚本打包三平台
