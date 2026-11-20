@@ -7,7 +7,7 @@
 .agent-engines,.agent-models{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .agent-engines label,.agent-models label{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;line-height:20px}
 .agent-engines label{padding:7px 14px 7px 12px;min-height:36px;border:1px solid var(--field);border-radius:6px;color:var(--text);font-weight:550}
-.agent-engines label:has(:checked){color:#174d9e;background:#f0f5ff;border-color:#8baef1}
+.agent-engines label:has(:checked){color:#174d9e;background:#EFF8F4;border-color:#8baef1}
 .agent-models{gap:20px}
 .agent-editor input[type=radio]{width:15px;height:15px;margin:0;accent-color:var(--blue)}
 .agent-model-field{margin-top:12px}

@@ -115,7 +115,7 @@ test('monthly search finds a story by exact key and title while keeping project 
  const raw={id:'300',key:'DEMO-300',fields:{summary:'2026年11月综合工时',issuetype:{id:'10001'},project:{key:'DEMO'},assignee:{name:'alice',key:'JIRAUSER1'},subtasks:[]}};
  const client=new JiraClient({url:'https://jira.example.test',username:'alice',token:'sample',request:async url=>{
   const jql=new URL(url).searchParams.get('jql');queries.push(jql);
-  const acceptsStory=/issuetype in \(10001,\s*10002\)/.test(jql);
+  const acceptsStory=/issuetype in \(10001,\s*10002,\s*10100\)/.test(jql);
   return response({total:acceptsStory?1:0,issues:acceptsStory?[raw]:[]});
  }});
  client.identity={name:'alice',key:'JIRAUSER1'};

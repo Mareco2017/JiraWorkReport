@@ -20,3 +20,4 @@ Thumbs.db
 
 # 原始需求、真实联调记录与截图仅供本机查阅；公开说明见 docs/README.md。
 /docs/issue/
+dist-new/

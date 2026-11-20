@@ -10,7 +10,52 @@ const scope={site:'https://fixture.invalid',project:'DEMO',user:'test'};
 const content='2026-11-09，需求讨论2h；文档整理1h';
 const extracted=[{title:'需求讨论',day:'2026-11-09',hours:2,type:'需求分析',startLine:1,endLine:1,evidence:'需求讨论2h',evidenceOccurrence:1},{title:'文档整理',day:null,hours:1.3,type:'',startLine:1,endLine:1,evidence:'文档整理1h',evidenceOccurrence:1}];
 async function fixture(t){const root=await mkdtemp(join(tmpdir(),'jira-import-test-'));t.after(()=>rm(root,{recursive:true,force:true}));const store=new Store(root);let calls=0;const agent={extract:async()=>{calls++;return structuredClone(extracted);}};const service=new BatchImportService({store,agent,documentsFactory:()=>({read:async()=>content})});return {store,service,agent,calls:()=>calls,config:{notesDirectory:root,agent:{mode:'custom',approvedInternal:true}}};}
-test('paste persists whole result, blank missing fields and unrounded hours, restores latest manual draft',async t=>{const f=await fixture(t);const result=await f.service.parse({kind:'paste',content},f.config,scope);assert.equal(result.records.length,2);assert.equal(result.records[1].day,'');assert.equal(result.records[1].hours,1.3);assert.equal(result.records[0].sourceText,'需求讨论2h');assert.equal(result.records[0].task,'需求调研及分析');await f.store.update(scope,s=>{s.drafts[0].title='人工标题';});const again=await f.service.parse({kind:'paste',content},f.config,scope);assert.equal(f.calls(),1);assert.equal(again.records[0].title,'人工标题');assert.equal((await f.store.load(scope)).drafts.length,2);});
+test('paste persists whole result, blank missing fields and unrounded hours, restores latest manual draft',async t=>{const f=await fixture(t);const result=await f.service.parse({kind:'paste',content},f.config,scope);assert.equal(result.records.length,2);assert.equal(result.records[1].day,'2026-11-09','同一行日期兜底到该行记录');assert.equal(result.records[1].hours,1.3);assert.equal(result.records[0].sourceText,'需求讨论2h');assert.equal(result.records[0].task,'需求调研及分析');await f.store.update(scope,s=>{s.drafts[0].title='人工标题';});const again=await f.service.parse({kind:'paste',content},f.config,scope);assert.equal(f.calls(),1);assert.equal(again.records[0].title,'人工标题');assert.equal((await f.store.load(scope)).drafts.length,2);});
+test('paste 从原文兜底提取 EXEPD 工单与日期，且不覆盖模型已给值',async t=>{
+ const f=await fixture(t);
+ const text='2026-11-09 需求讨论2h EXEPD-103\n2026年11月10日 文档整理1h EXEPD-104';
+ f.agent.extract=async()=>[
+  {title:'需求讨论',day:null,hours:2,type:'需求分析',startLine:1,endLine:1,evidence:'需求讨论2h EXEPD-103',evidenceOccurrence:1},
+  {title:'文档整理',day:'2026-11-11',hours:1,type:'需求分析',startLine:2,endLine:2,evidence:'文档整理1h EXEPD-104',evidenceOccurrence:1}
+ ];
+ const result=await f.service.parse({kind:'paste',content:text},f.config,scope);
+ assert.equal(result.records[0].issue,'EXEPD-103');
+ assert.equal(result.records[0].day,'2026-11-09');
+ assert.equal(result.records[1].issue,'EXEPD-104');
+ assert.equal(result.records[1].day,'2026-11-11','模型给出的有效日期优先');
+ assert.equal(result.records[0].missing.includes('day'),false);
+});
+
+test('粘贴日期写在独立标题行时，记录向上继承最近的日期',async t=>{
+ const f=await fixture(t);
+ const text='2026/11/19\nEXEPD-107 示例项目的报表字段验证, 1.5h\nEXEPD-102 日志工具试验，1h';
+ const lines=text.split('\n');
+ f.agent.extract=async()=>[
+  {title:'示例报表需求验证',day:null,hours:1.5,type:'需求分析',startLine:2,endLine:2,evidence:lines[1],evidenceOccurrence:1},
+  {title:'日志工具试验',day:null,hours:1,type:'需求分析',startLine:3,endLine:3,evidence:lines[2],evidenceOccurrence:1}
+ ];
+ const result=await f.service.parse({kind:'paste',content:text},f.config,scope);
+ assert.equal(result.records[0].day,'2026-11-19','应继承上方日期');
+ assert.equal(result.records[1].day,'2026-11-19');
+ assert.equal(result.records[0].issue,'EXEPD-107');
+ assert.equal(result.records[1].issue,'EXEPD-102');
+});
+
+test('多段日期按最近的上文日期继承，行内日期优先',async t=>{
+ const f=await fixture(t);
+ const text='2026/11/18\nEXEPD-1 甲 1h\n2026/11/19\nEXEPD-2 乙 1h\n2026/11/20 EXEPD-3 丙 1h';
+ const lines=text.split('\n');
+ f.agent.extract=async()=>[
+  {title:'甲',day:null,hours:1,type:'需求分析',startLine:2,endLine:2,evidence:lines[1],evidenceOccurrence:1},
+  {title:'乙',day:null,hours:1,type:'需求分析',startLine:4,endLine:4,evidence:lines[3],evidenceOccurrence:1},
+  {title:'丙',day:null,hours:1,type:'需求分析',startLine:5,endLine:5,evidence:lines[4],evidenceOccurrence:1}
+ ];
+ const result=await f.service.parse({kind:'paste',content:text},f.config,scope);
+ assert.equal(result.records[0].day,'2026-11-18');
+ assert.equal(result.records[1].day,'2026-11-19');
+ assert.equal(result.records[2].day,'2026-11-20','本行日期优先于上方日期');
+});
+
 test('invalid evidence/duplicate position rejects whole batch without writes',async t=>{const f=await fixture(t);for(const records of [[{...extracted[0],evidence:'虚构'}],[extracted[0],extracted[0]]]){f.agent.extract=async()=>records;await assert.rejects(f.service.parse({kind:'paste',content},f.config,scope),/有效|证据/);assert.equal((await f.store.load(scope)).drafts.length,0);}});
 test('same source success is excluded, deletion permits restoring base record',async t=>{const f=await fixture(t);const r=await f.service.parse({kind:'paste',content},f.config,scope);await f.store.update(scope,s=>{s.history=r.records.map(x=>({...x,status:'success'}));s.drafts=[];});assert.equal((await f.service.parse({kind:'paste',content},f.config,scope)).outcome,'registered');await f.store.update(scope,s=>{s.history=[];});assert.equal((await f.service.parse({kind:'paste',content},f.config,scope)).records.length,2);});
 test('file parsing uses exact preview; stale handle rejects after failed read',async t=>{const f=await fixture(t);const preview=await f.service.read('任意.md',f.config,scope);f.agent.extract=async text=>{assert.equal(text,content);return extracted;};assert.equal((await f.service.parse({kind:'file',sourceId:preview.source.id},f.config,scope)).records.length,2);f.service.documentsFactory=()=>({read:async()=>{throw Error('读取失败');}});await assert.rejects(f.service.read('坏.md',f.config,scope));await assert.rejects(f.service.parse({kind:'file',sourceId:preview.source.id},f.config,scope),/预览/);});
@@ -34,4 +79,12 @@ test('TC-017 evidence outside declared range is rejected even when it exists els
  assert.equal(result.records.length,1);assert.equal(result.records[0].sourceLine,3);
  assert.equal(result.records[0].sourceStart,text.indexOf('需求讨论2h'));
  assert.equal((await f.store.load(scope)).drafts.find(row=>row.id==='previous').title,'已有人工稿');
+});
+
+test('粘贴记录只取各自工单，宽证据范围不会串用上一个日期',async t=>{
+ const f=await fixture(t);
+ const text='2024-02-14\nDEMO-111 甲 1h；DEMO-222 乙 1h；没有工单 1h\n2024-02-15\nDEMO-333 丙 1h';
+ f.agent.extract=async()=>['DEMO-111 甲 1h','DEMO-222 乙 1h','没有工单 1h','DEMO-333 丙 1h'].map(evidence=>({...extracted[0],day:'',startLine:1,endLine:4,evidence}));
+ const {records}=await f.service.parse({kind:'paste',content:text},f.config,scope);
+ assert.deepEqual(records.map(row=>[row.issue,row.day]),[['DEMO-111','2024-02-14'],['DEMO-222','2024-02-14'],['','2024-02-14'],['DEMO-333','2024-02-15']]);
 });

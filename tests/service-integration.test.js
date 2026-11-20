@@ -45,7 +45,7 @@ async function fixture(t) {
    const evidence='梳理需求',line=content.split('\n').findIndex(text=>text.includes(evidence))+1;
    assert(line>0,'模型替身只支持本测试明确声明的事实');
    return [{title:evidence,day:'2024-02-15',hours:1,type:'需求分析',startLine:line,endLine:line,evidence,evidenceOccurrence:1}];
- }},createJira:options=>new JiraClient({...options,request}),createSubmission:jira=>new SubmissionService({store,jira})});
+ }},createJira:options=>new JiraClient({...options,request}),createSubmission:(jira,hooks)=>new SubmissionService({store,jira,...hooks})});
  async function connect(token='sample'){await service.call('testJira',{url:'https://jira.example.test',username:'alice',token});return service.call('saveJira',{url:'https://jira.example.test',username:'alice'});}
  return {service,store,keys,posts,connect,issue,directory,modelCalls,setExtractFail:()=>{extractFailure=true;},setFail:()=>{failOnce=true;}};
 }

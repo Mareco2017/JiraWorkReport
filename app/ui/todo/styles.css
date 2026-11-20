@@ -1,10 +1,10 @@
-.todo-product { --blue:#1762ed; --ink:#202a3a; --muted:#68758a; --border:#e0e6ef; --surface:#f7f9fc; --danger:#b94740; --green:#347357; }
+.todo-product { --blue:#35AA7B; --ink:#202a3a; --muted:#68758a; --border:#e0e6ef; --surface:#f7f9fc; --danger:#b94740; --green:#347357; }
 .todo-product * { box-sizing:border-box; }
 .todo-product { margin:0; color:var(--ink); background:#fff; font:14px -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; }
 .todo-product button,.todo-product input,.todo-product select,.todo-product textarea { font:inherit; color:inherit; }
 .todo-product button { cursor:pointer; border:1px solid var(--border); border-radius:6px; background:#fff; padding:8px 12px; }
 .todo-product button:hover { background:#f7f9fd; }
-.todo-product button:focus-visible,.todo-product input:focus-visible,.todo-product select:focus-visible,.todo-product textarea:focus-visible,.todo-product [tabindex]:focus-visible { outline:3px solid #adc8ff; outline-offset:2px; }
+.todo-product button:focus-visible,.todo-product input:focus-visible,.todo-product select:focus-visible,.todo-product textarea:focus-visible,.todo-product [tabindex]:focus-visible { outline:3px solid #A9DCC4; outline-offset:2px; }
 .todo-product button:disabled { cursor:default; opacity:.5; }
 .todo-product svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex:none; }
 .todo-product .symbols { position:absolute; width:0; height:0; overflow:hidden; }
@@ -18,7 +18,7 @@
 .todo-product .brand-mark svg { width:20px; height:20px; }
 .todo-product .nav-label { margin:0 12px 9px; color:#8993a3; font-size:11px; letter-spacing:1px; }
 .todo-product .nav-item { width:100%; display:flex; gap:9px; align-items:center; height:42px; border:0; padding:0 12px; background:transparent; font-size:13px; color:#647084; text-align:left; }
-.todo-product .nav-item.active { background:#eaf1ff; color:var(--blue); font-weight:600; }
+.todo-product .nav-item.active { background:#EFF8F4; color:var(--blue); font-weight:600; }
 .todo-product .nav-count { margin-left:auto; padding:2px 6px; color:#316ac4; background:#dce8ff; border-radius:4px; font-size:11px; font-weight:500; }
 .todo-product .nav-group { margin-top:30px; }
 .todo-product .sidebar-bottom { margin-top:auto; }
@@ -34,7 +34,7 @@
 .todo-product .icon-button svg { width:16px; height:16px; }
 .todo-product .group-nav { min-height:0; overflow:auto; flex:1; padding-top:3px; }
 .todo-product .group-item { display:block; grid-template-columns:none; align-items:center; border-radius:6px; margin-bottom:2px; height:34px; }
-.todo-product .group-item.active { background:#edf3ff; }
+.todo-product .group-item.active { background:#EFF8F4; }
 .todo-product .group-button { display:grid; grid-template-columns:minmax(0,1fr) 24px; align-items:center; gap:4px; height:34px; min-width:0; border:0; background:transparent; padding:0 9px; font-size:13px; text-align:left; color:#617086; width:100%; }
 .todo-product .group-button svg { width:14px; height:14px; color:#94a1b4; }
 .todo-product .group-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -56,7 +56,7 @@
 .todo-product .view-switch { display:flex; align-items:center; gap:5px; margin-right:auto; }
 .todo-product .view-tab { display:flex; align-items:center; gap:5px; padding:6px 8px; border:0; color:#8b98aa; background:transparent; border-radius:5px; font-size:12px; white-space:nowrap; }
 .todo-product .view-tab svg { width:14px; height:14px; }
-.todo-product .view-tab.active { color:var(--blue); background:#edf3ff; font-weight:550; }
+.todo-product .view-tab.active { color:var(--blue); background:#EFF8F4; font-weight:550; }
 .todo-product .query-tools { display:flex; gap:8px; align-items:center; min-width:0; flex-wrap:wrap; }
 .todo-product .query-tools>select { height:30px; border:0; padding:0 17px 0 4px; background:transparent; border-radius:5px; font-size:11px; color:#7a899e; }
 .todo-product #statusFilter { max-width:98px; }
@@ -124,7 +124,7 @@
 .todo-product .todo-calendar-view .month-arrow+button { border-left:1px solid #e4eaf3; }
 .todo-product .todo-calendar-view .month-arrow svg { width:16px; height:16px; transform:rotate(-90deg); }
 .todo-product .todo-calendar-view .month-arrow:first-child svg { transform:rotate(90deg); }
-.todo-product .todo-calendar-view .month-arrow:hover { background:#edf3ff; color:var(--blue); }
+.todo-product .todo-calendar-view .month-arrow:hover { background:#EFF8F4; color:var(--blue); }
 .todo-product .todo-calendar-view .month-calendar { border:1px solid #dfe6f0; border-radius:9px; overflow:hidden; background:#fff; }
 .todo-product .todo-calendar-view .week-head,.todo-product .todo-calendar-view .month-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); }
 .todo-product .todo-calendar-view .week-head>span { height:43px; display:flex; align-items:center; justify-content:center; color:#4b5e79; font-size:13px; font-weight:550; background:#f7f9fc; border-bottom:1px solid #e0e7f1; }
@@ -137,12 +137,12 @@
 .todo-product .todo-calendar-view .day-header { display:flex; align-items:center; gap:5px; min-height:27px; margin-bottom:7px; padding:0 2px; }
 .todo-product .todo-calendar-view .day-number { display:grid; place-items:center; width:27px; height:27px; border-radius:50%; color:#4b5d75; font-size:13px; font-weight:550; }
 .todo-product .todo-calendar-view .outside .day-number { color:#bbc5d3; font-weight:400; }
-.todo-product .todo-calendar-view .calendar-day.today .day-number { background:var(--blue); color:#fff; box-shadow:0 2px 5px #1762ed20; }
+.todo-product .todo-calendar-view .calendar-day.today .day-number { background:var(--blue); color:#fff; box-shadow:0 2px 5px #35AA7B20; }
 .todo-product .todo-calendar-view .today-label { color:#3970c8; font-size:10px; white-space:nowrap; }
 .todo-product .todo-calendar-view .day-count { color:#93a0b3; font-size:10px; margin-left:auto; white-space:nowrap; }
 .todo-product .todo-calendar-view .calendar-event { display:flex; align-items:center; gap:6px; width:100%; min-width:0; height:31px; padding:0 6px; margin-top:5px; border:0; border-radius:4px; color:#4b5e77; background:#f1f4f8; text-align:left; font-size:13px; }
 .todo-product .todo-calendar-view .calendar-event:hover { background:#e8edf5; color:#243247; }
-.todo-product .todo-calendar-view .calendar-event.progress { color:#315f9f; background:#edf3ff; }
+.todo-product .todo-calendar-view .calendar-event.progress { color:#315f9f; background:#EFF8F4; }
 .todo-product .todo-calendar-view .calendar-event.progress:hover { background:#dfeafe; }
 .todo-product .todo-calendar-view .calendar-event.done { color:#4c765e; background:#eef7f1; }
 .todo-product .todo-calendar-view .calendar-event.done:hover { background:#e2f0e7; }
@@ -278,7 +278,7 @@
 .todo-product .view-tab,.todo-product .filter-trigger,.todo-product .search-trigger,.todo-product .query-select-button { height:34px; font-size:13px; color:#617086; }
 .todo-product .query-select-button { display:flex; gap:7px; align-items:center; padding:0 8px; background:transparent; border:0; white-space:nowrap; }
 .todo-product .query-select-button svg { width:13px; height:13px; color:#8190a5; }
-.todo-product .query-select-button[aria-expanded=true] { background:#edf3ff; color:var(--blue); }
+.todo-product .query-select-button[aria-expanded=true] { background:#EFF8F4; color:var(--blue); }
 .todo-product .search-trigger { display:flex; align-items:center; gap:6px; padding:0 7px; border:0; background:transparent; }
 .todo-product .search-trigger svg { width:14px; height:14px; }
 .todo-product .search-active-dot { width:5px; height:5px; border-radius:50%; background:var(--blue); }
@@ -340,7 +340,7 @@
 .todo-product .row-calendar .calendar-weekdays,.todo-product .row-calendar .calendar-days { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; text-align:center; }
 .todo-product .row-calendar .calendar-weekdays { font-size:11px; color:var(--muted); margin-bottom:8px; }
 .todo-product .row-calendar .calendar-days button { position:relative; height:32px; border:0; background:#fff; padding:0; font-size:13px; }
-.todo-product .row-calendar .calendar-days button:hover { background:#edf3ff; }
+.todo-product .row-calendar .calendar-days button:hover { background:#EFF8F4; }
 .todo-product .row-calendar .calendar-days .current { box-shadow:inset 0 0 0 1px #a7c2ff; color:var(--blue); }
 .todo-product .row-calendar .calendar-days .chosen { background:var(--blue); color:#fff; box-shadow:none; }
 .todo-product .row-calendar .calendar-actions { justify-content:flex-start; gap:6px; margin-top:12px; padding-top:11px; border-top:1px solid #eef1f6; }
@@ -419,3 +419,117 @@
 .todo-product .todo-calendar-view .month-navigation {grid-area:nav;}
 .todo-product .todo-calendar-view .month-summary {grid-area:summary;margin:0;}
 .todo-product .todo-calendar-view .calendar-empty-note {margin:14px 0 0;}
+
+/* 完成待办与补填工时共用这套排布，沿用产品既有对话框骨架与配色。 */
+.todo-product .worklog-dialog { width:460px; }
+.todo-product .worklog-close { border:0; background:transparent; color:#8f9caf; font-size:20px; line-height:1; padding:2px 6px; }
+.todo-product .worklog-close:hover { color:var(--blue); background:transparent; }
+.todo-product .worklog-form { display:flex; flex-direction:column; min-height:0; }
+.todo-product .worklog-body { padding:18px 24px 20px; display:flex; flex-direction:column; gap:14px; }
+.todo-product .worklog-target { margin:0; font-size:13px; font-weight:550; color:#3d4d63; line-height:1.6; overflow-wrap:anywhere; }
+.todo-product .worklog-field { display:flex; flex-direction:column; gap:7px; font-size:13px; color:#617086; min-width:0; }
+.todo-product .worklog-field>input,.todo-product .worklog-field>select { height:38px; width:100%; min-width:0; padding:0 11px; font-size:13px; border:1px solid #d7e0ed; border-radius:6px; background:#fff; color:var(--ink); box-sizing:border-box; }
+.todo-product .worklog-field>input:disabled { background:#f4f6fa; color:#8b98aa; }
+.todo-product .worklog-chips { display:flex; gap:7px; flex-wrap:wrap; }
+.todo-product .worklog-chip { height:31px; min-width:52px; padding:0 10px; border:1px solid #d7e0ed; border-radius:6px; background:#f7f9fc; font-size:12px; color:#4c5d74; }
+.todo-product .worklog-chip[aria-pressed=true] { color:var(--blue); border-color:#A9DCC4; background:#EFF8F4; }
+.todo-product .worklog-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.todo-product .detail-field.worklog-field-row { grid-column:1 / -1; }
+.todo-product .worklog-tag { color:var(--exe-text-secondary); font-variant-numeric:tabular-nums; }
+.todo-product .worklog-tag.total { color:var(--exe-text-secondary); }
+.todo-product .worklog-tag.submitted { color:var(--exe-brand); }
+.todo-product .worklog-tag.pending { color:#FA494C; }
+.todo-product .worklog-tag.submitted { color:var(--green); }
+
+
+/* 详情页的工时账本：日期 / 工时 / 状态 / 操作，汇总在底部。 */
+.todo-product .worklog-section { margin-top:22px; padding-top:18px; border-top:1px solid #eef1f6; }
+.todo-product .worklog-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.todo-product .worklog-heading h3 { font-size:13px; font-weight:600; margin:0; }
+.todo-product .worklog-heading .text-action { font-size:11px; }
+.todo-product .worklog-list { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:6px; }
+.todo-product .worklog-item { display:grid; grid-template-columns:1fr auto auto auto; align-items:center; gap:10px; padding:8px 10px; background:#f8fafd; border:1px solid #e8edf5; border-radius:6px; font-size:12px; }
+.todo-product .worklog-day { color:#4c5d74; }
+.todo-product .worklog-hours { font-weight:600; font-variant-numeric:tabular-nums; }
+.todo-product .worklog-state { color:#8b98a9; font-size:11px; }
+.todo-product .worklog-state.done { color:var(--green); }
+.todo-product .worklog-actions { display:flex; gap:8px; }
+.todo-product .worklog-actions .text-action { font-size:11px; }
+.todo-product .worklog-total { margin:10px 0 0; text-align:right; font-size:12px; color:#617086; font-variant-numeric:tabular-nums; }
+.todo-product .worklog-empty { margin:10px 0 0; font-size:12px; color:#96a2b3; }
+
+
+/* EXE 设计规范对齐：工时账本与记录弹窗。 */
+.todo-product .worklog-item{padding:8px 12px;border:0;border-bottom:1px solid var(--exe-divider);border-radius:0;background:#fff;font-size:12px;line-height:20px}
+.todo-product .worklog-day{color:var(--exe-text-secondary)}
+.todo-product .worklog-hours{font-size:14px;line-height:22px;font-weight:500;color:var(--exe-text-heading);font-variant-numeric:tabular-nums}
+.todo-product .worklog-state{display:inline-flex;align-items:center;gap:6px;color:var(--exe-text-tertiary)}
+.todo-product .worklog-state::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.9}
+.todo-product .worklog-state.done{color:var(--exe-brand)}
+.todo-product .worklog-total{font-size:12px;line-height:20px;color:var(--exe-text-secondary);font-variant-numeric:tabular-nums}
+.todo-product .worklog-dialog{border:0;border-radius:12px;box-shadow:var(--exe-shadow-3)}
+.todo-product .worklog-chip{height:32px;border:1px solid var(--exe-border);border-radius:6px;background:#fff;font-size:14px;line-height:22px}
+.todo-product .worklog-chip[aria-pressed=true]{border-color:var(--exe-brand);background:var(--exe-brand-light);color:var(--exe-brand-click)}
+.todo-product .worklog-dialog .dialog-header h2{font-size:16px;line-height:24px;font-weight:500;color:var(--exe-text-heading)}
+
+
+/* 工时账本：标题/计数/操作同一行，行内日期-工时-状态-操作四列对齐。 */
+.todo-product .worklog-section{margin-top:24px;padding-top:16px;border-top:1px solid var(--exe-divider)}
+.todo-product .worklog-heading{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.todo-product .worklog-heading h3{font-size:16px;line-height:24px;font-weight:500;color:var(--exe-text-heading);margin:0}
+.todo-product .worklog-count{font-size:12px;line-height:20px;color:var(--exe-text-tertiary);font-variant-numeric:tabular-nums}
+.todo-product .worklog-heading .worklog-add{margin-left:auto;font-size:12px;line-height:20px;color:var(--exe-brand-click)}
+.todo-product .worklog-heading .worklog-add:hover{color:var(--exe-brand)}
+.todo-product .worklog-list{list-style:none;margin:0;padding:0;border-top:1px solid var(--exe-divider)}
+.todo-product .worklog-item{display:grid;grid-template-columns:minmax(0,1fr) 64px 64px auto;align-items:center;gap:12px;padding:12px 8px;border-bottom:1px solid var(--exe-divider);background:#fff;border-radius:0}
+.todo-product .worklog-item:hover{background:#F7F8FA}
+.todo-product .worklog-item.submitted{background:#FCFDFC}
+.todo-product .worklog-day{font-size:12px;line-height:20px;color:var(--exe-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.todo-product .worklog-hours{font-size:14px;line-height:22px;font-weight:500;color:var(--exe-text-heading);text-align:right;font-variant-numeric:tabular-nums}
+.todo-product .worklog-state{display:inline-flex;align-items:center;gap:6px;justify-self:start;font-size:12px;line-height:20px;color:var(--exe-text-tertiary);white-space:nowrap}
+.todo-product .worklog-state::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.9;flex:none}
+.todo-product .worklog-state.done{color:var(--exe-brand)}
+.todo-product .worklog-actions{display:flex;gap:12px;justify-self:end}
+.todo-product .worklog-actions .text-action{font-size:12px;line-height:20px;color:var(--exe-text-secondary)}
+.todo-product .worklog-actions .text-action:hover{color:var(--exe-brand-click)}
+.todo-product .worklog-actions .text-action.danger:hover{color:var(--exe-danger,#FA494C)}
+.todo-product .worklog-total{margin:0;padding:12px 8px;display:flex;justify-content:flex-end;gap:8px;font-size:12px;line-height:20px;color:var(--exe-text-secondary);font-variant-numeric:tabular-nums}
+.todo-product .worklog-total::before{content:"合计";color:var(--exe-text-tertiary)}
+.todo-product .worklog-empty{margin:0;padding:16px;border-radius:8px;background:#F7F8FA;text-align:center;font-size:12px;line-height:20px;color:var(--exe-text-tertiary)}
+.todo-product .worklog-dialog{border:0;border-radius:12px;box-shadow:var(--exe-shadow-3);width:460px}
+.todo-product .worklog-dialog .dialog-header{padding:20px 24px 16px;border-bottom:1px solid var(--exe-divider)}
+.todo-product .worklog-dialog .dialog-header h2{font-size:16px;line-height:24px;font-weight:500;color:var(--exe-text-heading)}
+.todo-product .worklog-dialog .dialog-header p{font-size:12px;line-height:20px;color:var(--exe-text-tertiary);margin-top:4px}
+.todo-product .worklog-body{padding:16px 24px;gap:16px}
+.todo-product .worklog-target{font-size:14px;line-height:22px;font-weight:500;color:var(--exe-text-primary);margin:0}
+.todo-product .worklog-field{gap:8px;font-size:12px;line-height:20px;color:var(--exe-text-secondary)}
+.todo-product .worklog-field>input{height:36px;border:1px solid var(--exe-border);border-radius:6px;font-size:14px;line-height:22px;color:var(--exe-text-primary)}
+.todo-product .worklog-chips{gap:8px}
+.todo-product .worklog-chip{height:32px;min-width:56px;border:1px solid var(--exe-border);background:#fff;font-size:14px;line-height:22px;color:var(--exe-text-primary)}
+.todo-product .worklog-chip[aria-pressed=true]{border-color:var(--exe-brand);background:var(--exe-brand-light);color:var(--exe-brand-click)}
+.todo-product .worklog-dialog .dialog-footer{padding:12px 24px;border-top:1px solid var(--exe-divider)}
+.todo-product .worklog-dialog .dialog-footer button{height:36px;font-size:14px;line-height:22px}
+.todo-product .worklog-dialog .primary{background:var(--exe-brand);border-color:var(--exe-brand);color:#fff}
+@media(max-width:1100px){.todo-product .worklog-item{grid-template-columns:minmax(0,1fr) 56px auto;gap:8px}.todo-product .worklog-state{display:none}}
+
+/* 工时账本与「详细说明 / 评论」同宽：左右各留 23px，列表行内再缩进 8px，悬停底色不外溢。 */
+.todo-product .worklog-section{margin:24px 23px 0;padding:16px 0 0;border-top:1px solid var(--exe-divider)}
+.todo-product .worklog-list{margin:0;padding:0;border-top:1px solid var(--exe-divider)}
+.todo-product .worklog-item{margin:0 -8px;padding:12px 8px;border-radius:6px;border-bottom:1px solid var(--exe-divider)}
+.todo-product .worklog-item:last-child{border-bottom:0}
+.todo-product .worklog-item:hover{background:#F7F8FA}
+.todo-product .worklog-item.submitted{background:transparent}
+.todo-product .worklog-total{margin:0 -8px;padding:12px 8px}
+.todo-product .worklog-empty{margin:0}
+
+
+/* 新建待办时的状态与工时输入。 */
+.todo-product .create-extras .hours-inline{display:flex;align-items:center;gap:8px}
+.todo-product .create-extras .hours-inline input{flex:1;min-width:0;height:38px;padding:0 11px;font-size:13px;border:1px solid var(--exe-border);border-radius:6px}
+.todo-product .create-extras .hours-inline span{font-size:12px;color:var(--exe-text-tertiary)}
+
+
+/* 新建待办：状态与工时上下排列，工时提供常用标签点选。 */
+.todo-product .create-extras{display:grid;gap:17px;margin-bottom:17px}
+.todo-product .create-hour-chips{gap:6px;margin-bottom:8px}
+.todo-product .create-hour-chips .worklog-chip{min-width:44px;height:30px;padding:0 8px;font-size:12px;line-height:20px}

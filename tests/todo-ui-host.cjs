@@ -16,8 +16,19 @@ app.whenReady().then(async()=>{
  window.webContents.on('console-message',event=>{if(event.level==='error')console.error(event.message);});
  const run=code=>window.webContents.executeJavaScript(code);
  const wait=async(code)=>{for(let n=0;n<120;n++){if(await run(code))return;await new Promise(r=>setTimeout(r,30));}throw Error('UI timeout: '+code);};
+ if(phase==='create'){
+  await fs.writeFile(path.join(directory,'personal-todos.json'),JSON.stringify({groups:[
+   {id:'g-a',name:'老分组A'},{id:'g-b',name:'老分组B'},
+   {id:'g-new1',name:'次新分组',createdAt:'2026-11-18T00:00:00.000Z'},
+   {id:'g-new2',name:'最新分组',createdAt:'2026-11-19T00:00:00.000Z'}
+  ],todos:[]}));
+ }
  await window.loadFile(path.resolve('app/ui/index.html'));
  await wait("Boolean(document.querySelector('[data-page=todo].active'))");
+ if(phase==='create'){
+  await wait("document.querySelectorAll('#groupNav .group-name').length===5");
+  assert.deepEqual(await run("[...document.querySelectorAll('#groupNav .group-name')].map(n=>n.textContent)"),['全部','最新分组','次新分组','老分组A','老分组B'],'默认按创建时间倒序，老分组保持原顺序');
+ }
  assert.equal(await run("document.querySelector('[data-page=todo]').classList.contains('active')"),true,'启动默认进入个人待办');
  await wait("Boolean(document.querySelector('#newTodo')) && !document.querySelector('#newTodo').disabled");
  if(phase==='create'){
@@ -31,19 +42,28 @@ app.whenReady().then(async()=>{
   await run("document.querySelector('.comment-action').click();document.querySelector('#commentInput').value='真实评论';document.querySelector('#commentInput').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#commentForm').requestSubmit()");
   await wait("document.querySelector('.comment-text')?.textContent==='真实评论'");
   await run("document.querySelector('.detail-action-bar button').click()");
+  await wait("Boolean(document.querySelector('.worklog-dialog[open]'))");
+  await run("document.querySelector('.worklog-dialog .worklog-chip').click();document.querySelector('.worklog-dialog button[type=submit]').click()");
   await wait("document.querySelector('#detailStatus').value==='已完成'");
   await run("document.querySelectorAll('.detail-action-bar button')[1].click();document.querySelector('#todoDescription').value='失败后重试的说明'");
   const before=await fs.readFile(path.join(directory,'personal-todos.json'),'utf8');
-  await fs.chmod(directory,0o500);
-  try{
-   await run("document.querySelector('#todoForm').requestSubmit()");
-   await wait("!document.querySelector('#editorError').hidden");
-   assert.equal(await fs.readFile(path.join(directory,'personal-todos.json'),'utf8'),before);
-   assert.equal(await run("document.querySelector('#todoDescription').value"),'失败后重试的说明');
-  }finally{await fs.chmod(directory,0o700);}
+  // Windows 的 chmod 不会阻止写入，只读失败场景仅在类 Unix 上可复现。
+  if(process.platform!=='win32'){
+   await fs.chmod(directory,0o500);
+   try{
+    await run("document.querySelector('#todoForm').requestSubmit()");
+    await wait("!document.querySelector('#editorError').hidden");
+    assert.equal(await fs.readFile(path.join(directory,'personal-todos.json'),'utf8'),before);
+    assert.equal(await run("document.querySelector('#todoDescription').value"),'失败后重试的说明');
+   }finally{await fs.chmod(directory,0o700);}
+  }
   await run("document.querySelector('#todoForm').requestSubmit()");
   await wait("document.querySelector('#todoEditor').hidden");
-  await run("document.querySelector('#closeDrawer').click();document.querySelector('#statusFilter').value='已完成';document.querySelector('#statusFilter').dispatchEvent(new Event('change'));document.querySelector('#sortRule').value='due-asc';document.querySelector('#sortRule').dispatchEvent(new Event('change'));document.querySelector('#filterTrigger').click();document.querySelector('#priorityFilter').value='unset';document.querySelector('#dateMode').value='undated';document.querySelector('#filterForm').requestSubmit();document.querySelector('#collapseGroups').click();document.querySelector('[data-page=daily]').click()");
+  await wait("document.querySelector('.todo-table').textContent.includes('真实保存与重开')");
+ const pendingRow=await run("[...document.querySelectorAll('.todo-table tbody tr')].find(tr=>tr.textContent.includes('真实保存与重开')).textContent");
+ assert.match(pendingRow,/总工时 0\.25 h/,'列表应展示总工时');
+ assert.doesNotMatch(pendingRow,/未登记|已登记/,'列表只显示总工时，登记状态留在详情');
+ await run("document.querySelector('#closeDrawer').click();document.querySelector('#statusFilter').value='已完成';document.querySelector('#statusFilter').dispatchEvent(new Event('change'));document.querySelector('#sortRule').value='due-asc';document.querySelector('#sortRule').dispatchEvent(new Event('change'));document.querySelector('#filterTrigger').click();document.querySelector('#priorityFilter').value='unset';document.querySelector('#dateMode').value='undated';document.querySelector('#filterForm').requestSubmit();document.querySelector('#collapseGroups').click();document.querySelector('[data-page=daily]').click()");
   await wait("Boolean(document.querySelector('#issue'))");
   await run("document.querySelector('[data-page=todo]').click()");
   await wait("Boolean(document.querySelector('#newTodo')) && !document.querySelector('#newTodo').disabled");
@@ -61,6 +81,23 @@ app.whenReady().then(async()=>{
  assert.equal(await run("document.querySelector('.group-footnote')===null"),true);
  const state=JSON.parse(await fs.readFile(path.join(directory,'personal-todos.json'),'utf8'));
  assert.equal(state.todos.length,1);assert.equal(state.todos[0].title,'真实保存与重开');assert.equal(state.todos[0].status,'已完成');assert.equal(state.todos[0].comments[0].content,'真实评论');assert.equal(state.todos[0].description,'失败后重试的说明');
+  assert.equal(state.todos[0].workLogs[0].hours,.25,'完成对话框记录的工时应保存到待办');assert.equal(state.todos[0].workLogs[0].state,'recorded');assert.ok(state.todos[0].completedAt,'完成时间应单独保存');
  if(process.argv[4]){window.setContentSize(1250,750);await new Promise(r=>setTimeout(r,150));await fs.writeFile(process.argv[4],(await window.webContents.capturePage()).toPNG());}
+ if(phase==='reopen'){
+  await run("document.querySelector('#newTodo').click()");
+  await wait("Boolean(document.querySelector('#createExtras'))");
+  await run("document.querySelector('#createExtras [data-create-hours=\"2\"]').click()");
+  assert.equal(await run("document.querySelector('#todoHours').value"),'2','点选常用工时应写入输入框');
+  await run("document.querySelector('#todoTitle').value='新建即完成';document.querySelector('#todoTitle').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#todoHours').value='1.5';document.querySelector('#todoHours').dispatchEvent(new Event('input'));document.querySelector('#todoDue').value='2026-11-10';document.querySelector('#todoStatus').value='已完成';document.querySelector('#todoForm').requestSubmit()");
+  await wait("document.querySelector('#todoEditor').hidden");
+  const after=JSON.parse(await fs.readFile(path.join(directory,'personal-todos.json'),'utf8'));
+  const created=after.todos.find(todo=>todo.title==='新建即完成');
+  assert.ok(created,'新建待办应保存');
+  assert.equal(created.status,'已完成');
+  assert.equal(created.workLogs[0].hours,1.5);
+  assert.equal(created.workLogs[0].day,new Date().toLocaleDateString('sv-SE'),'创建工时使用当天，不借用截止日期');
+  assert.equal(created.dueDate,'2026-11-10');
+  assert.ok(created.completedAt,'直接完成应写完成时间');
+ }
  console.log('TODO_UI_PASS '+phase);window.destroy();app.quit();
 }).catch(error=>{console.error(error);app.exit(1);});

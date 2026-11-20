@@ -40,7 +40,7 @@ test('failed readback retains local data; retry reconciles the same ID without a
  offline=false;await f.service.updateRecord('a',changes);assert.equal(f.writes.length,1);assert.equal(f.state().history[0].hours,2.5);
 });
 test('invalid editable fields fail before any remote update',async()=>{
- for(const values of [{title:' '},{day:'2024-02-30'},{day:'2024-02-21'},{hours:0},{hours:.25}]){
+ for(const values of [{title:' '},{day:'2024-02-30'},{day:'2024-02-21'},{hours:0},{hours:.1},{hours:.3}]){
   const f=fixture();await assert.rejects(f.service.updateRecord('a',{...changes,...values}),{code:'INVALID_RECORD'});assert.equal(f.writes.length,0);
  }
 });
