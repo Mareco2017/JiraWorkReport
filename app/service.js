@@ -1,6 +1,6 @@
 import {PersonalTodoService,todoCommands} from './todos.js';
 import {BatchImportService,todoEntryRecordId} from './batch-import.js';
-import {refreshTodoDraft} from './todo-data.js';
+import {refreshTodoDraft,todoWorkLogOrigin} from './todo-data.js';
 import { randomUUID } from 'node:crypto';
 
 // 桌面页面只调用这里列出的业务动作。凭据读取和远端请求留在主进程。
@@ -44,7 +44,7 @@ export class WorkbenchService {
   /** 提交器只读取按笔索引的待办来源，不负责保存个人待办。 */
   async todoEntries() {
     const {state}=await this.todoStore().call('todoLoad');
-    return new Map(state.todos.flatMap(todo=>(todo.workLogs||[]).map(entry=>[entry.id,{...entry,todoId:todo.id}])));
+    return new Map(state.todos.flatMap(todo=>(todo.workLogs||[]).map(entry=>[entry.id,{...todoWorkLogOrigin(entry,todo.title),state:entry.state,todoId:todo.id}])));
   }
   /** 提交成功的工时回写到对应的一笔，页面据此显示“已登记”。 */
   async settleTodo(item) {
@@ -92,8 +92,9 @@ export class WorkbenchService {
     }
     if(command==='todoUpdateWorkLog'){
       const result=await todos.call(command,data);
-      const updated=result.state.todos.find(row=>row.id===data.todoId).workLogs.find(row=>row.id===data.entryId);
-      await this.syncDraft(recordId,updated);
+      const updatedTodo=result.state.todos.find(row=>row.id===data.todoId);
+      const updated=updatedTodo.workLogs.find(row=>row.id===data.entryId);
+      await this.syncDraft(recordId,todoWorkLogOrigin(updated,updatedTodo.title));
       return result;
     }
     const config=await this.store.loadConfig(),scope=await this.scope(config);

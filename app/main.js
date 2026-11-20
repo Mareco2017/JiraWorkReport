@@ -45,7 +45,7 @@ const service=new WorkbenchService({
   openExternal: url=>shell.openExternal(url)
 });
 async function createWindow(){
-window=new BrowserWindow({width:1250,height:750,minWidth:1024,minHeight:720,title:'JIRA工时填报',backgroundColor:'#fff',webPreferences:{preload:join(directory,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+window=new BrowserWindow({width:1200,height:750,minWidth:1024,minHeight:720,title:'JIRA工时填报',backgroundColor:'#fff',webPreferences:{preload:join(directory,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
 window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
 window.webContents.on('will-navigate',event=>event.preventDefault());
 await window.loadFile(join(directory,'ui/index.html'));

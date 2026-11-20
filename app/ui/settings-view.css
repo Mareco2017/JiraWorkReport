@@ -18,9 +18,9 @@
 .settings-product .setting-badge::before{content:'';height:6px;width:6px;border-radius:50%;background:currentColor}
 .settings-product .setting-badge.ready{color:#246248;background:#e9f4ed}
 .settings-product .setting-button{min-height:36px;padding:6px 14px;font-size:13px;border:1px solid #ccd7e5;background:#fff;color:var(--text);border-radius:6px;font-weight:550;white-space:nowrap}
-.settings-product .setting-button.setting-primary{border-color:var(--blue);background:var(--blue);color:#fff;font-weight:600}
+.settings-product .setting-button.setting-primary{border-color:var(--exe-brand);background:var(--exe-brand);color:#fff;font-weight:600}
 .settings-product .setting-button.setting-primary:disabled{background:#aab9ce;border-color:#aab9ce}
-.settings-product .setting-link{padding:4px 0;border:0;background:transparent;color:#2057ac;font-size:13px;white-space:nowrap}
+.settings-product .setting-link{padding:4px 0;border:0;background:transparent;color:var(--exe-brand-click);font-size:13px;white-space:nowrap}
 .settings-product .setting-form,.settings-product .setting-agent-form{display:grid;gap:18px;max-width:590px}
 .settings-product .setting-form{max-width:490px}
 .settings-product .setting-field{display:grid;gap:7px;font-size:13px;font-weight:600;color:#33445a;min-width:0}
@@ -47,16 +47,16 @@
 .settings-product .setting-month-results{display:grid;max-height:152px;overflow:auto;border:1px solid var(--border);border-radius:6px}
 .settings-product .setting-month-results:empty{display:none}
 .settings-product .setting-month-option{border:0;background:#fff;text-align:left;min-height:34px;padding:5px 10px;font-size:13px}
-.settings-product .setting-month-option:hover,.settings-product .setting-month-option.selected{background:#edf4ff;color:#1d55ad}
+.settings-product .setting-month-option:hover,.settings-product .setting-month-option.selected{background:var(--exe-brand-light);color:var(--exe-brand-click)}
 .settings-product .setting-agent-form fieldset{border:0;padding:0;margin:0;min-width:0}
 .settings-product .setting-agent-form legend{font-size:13px;font-weight:600;margin-bottom:9px}
 .settings-product .setting-engine-options,.settings-product .setting-model-options{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
 .settings-product .setting-engine-options{gap:8px}
 .settings-product .setting-engine-options label,.settings-product .setting-model-options label{font-weight:400;display:inline-flex;gap:8px;align-items:center;font-size:13px;line-height:20px;cursor:pointer}
 .settings-product .setting-engine-options label{padding:7px 14px 7px 12px;border:1px solid var(--field);border-radius:6px;min-height:36px;font-weight:550}
-.settings-product .setting-engine-options label:has(:checked){color:#174d9e;background:#EFF8F4;border-color:#8baef1}
-.settings-product input[type=radio]{margin:0;width:15px;height:15px;accent-color:var(--blue)}
-.settings-product .setting-model-service{border-left:2px solid #d9e5f9;padding-left:14px;margin-top:14px;display:grid;gap:13px}
+.settings-product .setting-engine-options label:has(:checked){color:var(--exe-brand-click);background:var(--exe-brand-light);border-color:var(--exe-brand-ring)}
+.settings-product input[type=radio]{margin:0;width:15px;height:15px;accent-color:var(--exe-brand)}
+.settings-product .setting-model-service{border-left:2px solid var(--exe-brand-ring);padding-left:14px;margin-top:14px;display:grid;gap:13px}
 .settings-product .setting-custom-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
 .settings-product .setting-custom-grid>.setting-field:first-child{grid-column:1/-1}
 .settings-product .setting-agent .setting-foot{justify-content:space-between}

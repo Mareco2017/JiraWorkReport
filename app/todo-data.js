@@ -5,11 +5,16 @@ export const todoPriorities = ['','高','中','低'];
 export const workLogStates = ['recorded','submitted'];
 export const WORKLOG_MAX = 50;
 
-/** 用带入时的值区分草稿手改和待办更新，只同步日期和工时。 */
+/** 旧记录没有单笔描述，仍使用待办标题带入。 */
+export function todoWorkLogOrigin(entry,todoTitle) {
+ return {day:entry.day,hours:entry.hours,title:entry.description||todoTitle};
+}
+
+/** 用带入时的值区分草稿手改和待办更新；旧草稿的原始标题保存在 sourceText。 */
 export function refreshTodoDraft(draft,entry) {
  const origin={},conflicts={};
- for(const field of ['day','hours']){
-  const old=draft.todoOrigin?.[field],current=entry[field];
+ for(const field of ['day','hours','title']){
+  const old=draft.todoOrigin?.[field]??(field==='title'?draft.sourceText??draft.title:undefined),current=entry[field];
   const manual=field==='hours'&&draft[field]!==''?Number(draft[field]):draft[field];
   if(old===current || manual===current){origin[field]=current;continue;}
   if(old===manual){draft[field]=current;origin[field]=current;continue;}
@@ -39,7 +44,7 @@ export function todoChoice(value,choices,field) {
  if(!choices.includes(value))throw todoValidation('请选择有效选项',field);
  return value;
 }
-/** 一笔待办工时只含日期和工时；状态、工单号等由主进程回写。 */
+/** 描述可不填，以兼容旧记录及新建时快捷记工时；登记状态仍由主进程回写。 */
 export function todoWorkLogEntry(value) {
  const source=todoObject(value,'workLog');
  const hours=Number(source.hours);
@@ -48,9 +53,10 @@ export function todoWorkLogEntry(value) {
  const day=todoDate(source.day ?? '','day');
  if(!day)throw todoValidation('请选择有效的工作日期','day');
  // 已确认允许未来日期，这里不比较 today。
- return {day,hours};
+ const description=Object.hasOwn(source,'description')?todoText(source.description,'description',{trim:true}):'';
+ return description?{day,hours,description}:{day,hours};
 }
-/** 修改一笔工时：允许只改日期或只改工时。 */
+/** 修改时缺少描述表示不改，传空字符串则清除描述。 */
 export function todoWorkLogPatch(value) {
  const source=todoObject(value,'workLog'),patch={};
  if(Object.hasOwn(source,'hours')){
@@ -63,6 +69,7 @@ export function todoWorkLogPatch(value) {
   if(!day)throw todoValidation('请选择有效的工作日期','day');
   patch.day=day;
  }
+ if(Object.hasOwn(source,'description'))patch.description=todoText(source.description,'description',{trim:true});
  if(!Object.keys(patch).length)throw todoValidation('请填写要修改的工时','workLog');
  return patch;
 }

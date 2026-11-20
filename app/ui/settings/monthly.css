@@ -16,6 +16,6 @@
 .month-search-actions{justify-content:flex-end;margin-top:4px}
 .month-results{display:grid;max-height:152px;overflow:auto;border:1px solid var(--border);border-radius:6px}
 .month-result{background:white;border:0;text-align:left;display:flex;align-items:center;gap:12px;min-height:34px;padding:5px 10px}
-.month-result[aria-pressed=true],.month-result:hover{background:#edf4ff;color:#1d55ad}
+.month-result[aria-pressed=true],.month-result:hover{background:var(--exe-brand-light);color:var(--exe-brand-click)}
 .month-message{color:var(--muted);font-size:12px;margin:2px 0 0}
 .month-editor [hidden],.month-section [hidden]{display:none!important}

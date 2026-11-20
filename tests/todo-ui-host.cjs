@@ -12,7 +12,7 @@ app.whenReady().then(async()=>{
  const store=new Store(directory);
  const service=new WorkbenchService({store,createJira(){throw Error('TODO must not request JIRA');},agent:{extract(){throw Error('TODO must not request Agent');}}});
  ipcMain.handle('workbench:call',async(_,command,payload)=>{try{return {ok:true,value:await service.call(command,payload)};}catch(error){return {ok:false,error:error.message,code:error.code,field:error.field};}});
- const window=new BrowserWindow({show:false,width:1250,height:750,webPreferences:{preload:path.resolve('app/preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ const window=new BrowserWindow({show:false,width:1200,height:750,webPreferences:{preload:path.resolve('app/preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
  window.webContents.on('console-message',event=>{if(event.level==='error')console.error(event.message);});
  const run=code=>window.webContents.executeJavaScript(code);
  const wait=async(code)=>{for(let n=0;n<120;n++){if(await run(code))return;await new Promise(r=>setTimeout(r,30));}throw Error('UI timeout: '+code);};
@@ -32,6 +32,28 @@ app.whenReady().then(async()=>{
  assert.equal(await run("document.querySelector('[data-page=todo]').classList.contains('active')"),true,'启动默认进入个人待办');
  await wait("Boolean(document.querySelector('#newTodo')) && !document.querySelector('#newTodo').disabled");
  if(phase==='create'){
+  const dateStyles=selector=>run(`(()=>{
+   const row=document.querySelector('${selector}');
+   return [...row.querySelectorAll('button,svg')].map(node=>{
+    const s=getComputedStyle(node);
+    return [s.height,s.padding,s.border,s.borderRadius,s.backgroundColor,s.color,s.fontSize,s.fontWeight,s.lineHeight,s.alignItems,s.gap];
+   });
+  })()`);
+  assert.deepEqual(await run("[...document.querySelectorAll('nav [data-page]')].map(n=>n.dataset.page)"),['todo','daily','batch','history','settings']);
+  await run("document.querySelector('[data-page=daily]').click()");
+  await wait("Boolean(document.querySelector('#taskNote'))");
+  const dailyDate=await dateStyles('#dailyWorkDate');
+  for(const [id,text] of [['taskNote','提交时自动创建同名子任务'],['subtaskNumberNote','留空自动匹配或创建']]){
+   assert.equal(await run(`getComputedStyle(document.querySelector('#${id}')).visibility`),'hidden');
+   await run(`document.querySelector('[aria-describedby=${id}]').focus()`);
+   assert.deepEqual(await run(`(()=>{const tip=document.querySelector('#${id}');return [getComputedStyle(tip).visibility,tip.textContent];})()`),['visible',text]);
+  }
+  if(process.argv[4]){
+   await run('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+   await fs.writeFile(path.join(directory,'daily-help.png'),(await window.webContents.capturePage()).toPNG());
+  }
+  await run("document.querySelector('[data-page=todo]').click()");
+  await wait("Boolean(document.querySelector('#newTodo')) && !document.querySelector('#newTodo').disabled");
   await run("document.querySelector('#newTodo').click()");
   await wait("Boolean(document.querySelector('#todoTitle'))");
   await run("document.querySelector('#todoTitle').value='真实保存与重开';document.querySelector('#todoTitle').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#todoForm').requestSubmit()");
@@ -43,8 +65,28 @@ app.whenReady().then(async()=>{
   await wait("document.querySelector('.comment-text')?.textContent==='真实评论'");
   await run("document.querySelector('.detail-action-bar button').click()");
   await wait("Boolean(document.querySelector('.worklog-dialog[open]'))");
-  await run("document.querySelector('.worklog-dialog .worklog-chip').click();document.querySelector('.worklog-dialog button[type=submit]').click()");
+  assert.equal(await run("document.querySelector('.worklog-dialog').getBoundingClientRect().width"),420);
+  assert.deepEqual(await dateStyles('.worklog-dialog .date-row'),dailyDate,'日期按钮、快捷键和图标使用与工时填报一致的样式');
+  assert.equal(await run(`(()=>{
+   const button=document.querySelector('#worklogDay'),center=node=>node.getBoundingClientRect().top+node.getBoundingClientRect().height/2;
+   return [...button.children].every(node=>Math.abs(center(node)-center(button))<1);
+  })()`),true,'图标、日期和箭头垂直居中');
+  await run("document.querySelector('#worklogDescription').value='整理筛选条件';document.querySelector('.worklog-dialog .worklog-chip').click();document.querySelector('.worklog-dialog [data-date]:last-child').click();document.querySelector('#worklogDay').click();document.querySelector('.date-head button').click()");
+  await wait("Boolean(document.querySelector('.worklog-dialog .date-popover .calendar-grid'))");
+  if(process.argv[4]){
+   await run('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+   await fs.writeFile(path.join(directory,'worklog-calendar.png'),(await window.webContents.capturePage()).toPNG());
+  }
+  window.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'});
+  await wait("!document.querySelector('.date-popover') && Boolean(document.querySelector('.worklog-dialog[open]'))");
+  if(process.argv[4])await fs.writeFile(path.join(directory,'worklog-dialog.png'),(await window.webContents.capturePage()).toPNG());
+  await run("document.querySelector('.worklog-dialog button[type=submit]').click()");
   await wait("document.querySelector('#detailStatus').value==='已完成'");
+  await wait("document.querySelector('.worklog-description')?.textContent==='整理筛选条件'");
+  await run("document.querySelector('.worklog-actions button').click()");
+  assert.equal(await run("document.querySelector('#worklogDescription').value"),'整理筛选条件');
+  await run("document.querySelector('#worklogDescription').value='补充验收说明';document.querySelector('.worklog-dialog button[type=submit]').click()");
+  await wait("document.querySelector('.worklog-description')?.textContent==='补充验收说明'");
   await run("document.querySelectorAll('.detail-action-bar button')[1].click();document.querySelector('#todoDescription').value='失败后重试的说明'");
   const before=await fs.readFile(path.join(directory,'personal-todos.json'),'utf8');
   // Windows 的 chmod 不会阻止写入，只读失败场景仅在类 Unix 上可复现。
@@ -82,7 +124,10 @@ app.whenReady().then(async()=>{
  const state=JSON.parse(await fs.readFile(path.join(directory,'personal-todos.json'),'utf8'));
  assert.equal(state.todos.length,1);assert.equal(state.todos[0].title,'真实保存与重开');assert.equal(state.todos[0].status,'已完成');assert.equal(state.todos[0].comments[0].content,'真实评论');assert.equal(state.todos[0].description,'失败后重试的说明');
   assert.equal(state.todos[0].workLogs[0].hours,.25,'完成对话框记录的工时应保存到待办');assert.equal(state.todos[0].workLogs[0].state,'recorded');assert.ok(state.todos[0].completedAt,'完成时间应单独保存');
- if(process.argv[4]){window.setContentSize(1250,750);await new Promise(r=>setTimeout(r,150));await fs.writeFile(process.argv[4],(await window.webContents.capturePage()).toPNG());}
+  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
+  assert.equal(state.todos[0].workLogs[0].day,yesterday.toLocaleDateString('sv-SE'));
+  assert.equal(state.todos[0].workLogs[0].description,'补充验收说明');
+ if(process.argv[4]){window.setContentSize(1200,750);await new Promise(r=>setTimeout(r,150));await fs.writeFile(process.argv[4],(await window.webContents.capturePage()).toPNG());}
  if(phase==='reopen'){
   await run("document.querySelector('#newTodo').click()");
   await wait("Boolean(document.querySelector('#createExtras'))");

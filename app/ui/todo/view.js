@@ -1,6 +1,7 @@
 import {template} from './template.js';
 import {matchesQuery as matchTodo,compareTodos,dayKey,monthCells} from './query.js';
 import {HOUR_CHOICES,HOURS_ERROR,hoursValid} from '../../worklogs.js';
+import {bindWorkDate,closeCalendar,workDateMarkup} from '../work-date.js';
 
 // 每次挂载拥有独立的查看状态，释放后异步保存回包不会操作宿主其他页面。
 export function mountTodo(root,{call,onCount=()=>{},getTypes=()=>[],getProject=()=>''}){
@@ -622,7 +623,7 @@ function openWorklogDialog(todo,{mode='add',entry=null}={}) {
   const heading=element('div');
   const title=element('h2',null,mode==='complete'?'完成待办':editing?'修改工时':'记录工时');
   title.id='worklogDialogTitle';
-  heading.append(title,element('p',null,mode==='complete'?'顺手记一笔工时；也可以稍后到详情里补。':editing?'修改这一笔的日期或工时。':'记录一笔实际投入的工时，可记录多笔。'));
+  heading.append(title);
   const close=element('button','worklog-close','×');
   close.type='button';close.setAttribute('aria-label','关闭');
   header.append(heading,close);
@@ -630,6 +631,18 @@ function openWorklogDialog(todo,{mode='add',entry=null}={}) {
   const form=element('form','worklog-form');form.noValidate=true;
   const body=element('div','worklog-body');
   body.append(element('p','worklog-target',todo.title));
+
+  const today=localToday();
+  let day=entry?.day||today;
+  const dayField=element('div','worklog-field');
+  dayField.innerHTML='<label for="worklogDay">工作日期</label><div class="date-row">'+workDateMarkup('worklogDay','worklogDayValue')+'</div>';
+  // 本机待办允许预记工时；正式填报仍只允许今天及过去。
+  bindWorkDate(dayField,{value:day,today,max:'',onSelect:value=>{day=value;}});
+
+  const descriptionField=element('label','worklog-field');
+  const description=element('input');description.type='text';description.id='worklogDescription';
+  description.placeholder='未填写时使用待办标题';description.value=entry?.description??'';
+  descriptionField.append(element('span',null,'工作事项描述'),description);
 
   const hoursInput=element('input');
   hoursInput.type='number';hoursInput.min='0.25';hoursInput.step='0.25';hoursInput.id='worklogHours';
@@ -643,28 +656,22 @@ function openWorklogDialog(todo,{mode='add',entry=null}={}) {
   }
   hoursInput.addEventListener('input',syncChips);syncChips();
   const hoursField=element('div','worklog-field');
-  hoursField.append(element('span',null,'工时'),chips,hoursInput);
-
-  const dayInput=element('input');dayInput.type='date';dayInput.id='worklogDay';
-  dayInput.value=entry?.day||localToday();
-  const dayField=element('div','worklog-field');
-  dayField.append(element('span',null,'工作日期'),dayInput);
-
-  const row=element('div','worklog-row');
-  row.append(hoursField,dayField);
-  body.append(row);
+  const hoursLabel=element('label',null,'工时（小时）');hoursLabel.htmlFor=hoursInput.id;
+  hoursField.append(hoursLabel,chips,hoursInput);
+  body.append(dayField,descriptionField,hoursField);
   const error=element('p','field-error');error.setAttribute('role','alert');error.hidden=true;
   body.append(error);
 
   const footer=element('div','dialog-footer');
+  const dismiss=()=>{closeCalendar();dialog.close();dialog.remove();render();};
   const finish=async(command,payload,button)=>{
     setError(error,'');
     if(!await send(command,payload,error,button))return false;
-    dialog.close();dialog.remove();render();
+    dismiss();
     return true;
   };
   const cancel=element('button',null,'取消');cancel.type='button';
-  cancel.addEventListener('click',()=>{dialog.close();dialog.remove();render();});
+  cancel.addEventListener('click',dismiss);
   const skip=element('button',null,'暂不填写，仅完成');skip.type='button';
   if(mode==='complete')skip.addEventListener('click',async()=>{
     if(await finish('todoComplete',{id:todo.id},skip))showToast('已标记完成，工时稍后可补');
@@ -672,9 +679,8 @@ function openWorklogDialog(todo,{mode='add',entry=null}={}) {
   const save=element('button','primary',mode==='complete'?'保存并完成':editing?'保存修改':'保存');save.type='submit';
   form.addEventListener('submit',async event=>{
     event.preventDefault();
-    const workLog={hours:hoursInput.value,day:dayInput.value};
-    if(workLog.hours===''||workLog.hours===null){setError(error,'请选择或填写工时');hoursInput.focus();return;}
-    if(!workLog.day){setError(error,'请选择工作日期');dayInput.focus();return;}
+    const workLog={hours:hoursInput.value,day,description:description.value};
+    if(!workLog.hours){setError(error,'请选择或填写工时');hoursInput.focus();return;}
     const command=mode==='complete'?'todoComplete':editing?'todoUpdateWorkLog':'todoAddWorkLog';
     const payload=mode==='complete'?{id:todo.id,workLog}:editing?{todoId:todo.id,entryId:entry.id,workLog}:{todoId:todo.id,workLog};
     if(!await finish(command,payload,save))return;
@@ -683,11 +689,11 @@ function openWorklogDialog(todo,{mode='add',entry=null}={}) {
   if(mode==='complete')footer.append(cancel,skip,save);else footer.append(cancel,save);
   form.append(body,footer);
   dialog.append(header,form);
-  dialog.addEventListener('cancel',event=>{event.preventDefault();dialog.close();dialog.remove();render();});
-  close.addEventListener('click',()=>{dialog.close();dialog.remove();render();});
+  dialog.addEventListener('cancel',event=>{event.preventDefault();dismiss();});
+  close.addEventListener('click',dismiss);
   root.append(dialog);
   dialog.showModal();
-  hoursInput.focus();
+  description.focus();
 }
 
 function renderWorkLogs(todo) {
@@ -710,6 +716,7 @@ function renderWorkLogs(todo) {
 function renderWorkLogRow(todo,entry) {
   const row=element('li','worklog-item'+(entry.state==='submitted'?' submitted':''));row.dataset.entryId=entry.id;
   row.append(element('span','worklog-day',dateLabel(entry.day)));
+  if(entry.description)row.append(element('span','worklog-description',entry.description));
   row.append(element('span','worklog-hours',entry.hours+' h'));
   const submitted=entry.state==='submitted';
   row.append(element('span','worklog-state '+(submitted?'done':''),submitted?'已登记':'未登记'));

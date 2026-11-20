@@ -4,12 +4,12 @@
 .period-picker{position:relative}
 #periodBar{display:flex;align-items:center;padding:3px;gap:2px;background:#f0f3f8;border-radius:7px}
 #periodBar button{display:flex;align-items:center;gap:4px;height:30px;padding:0 12px;border:1px solid transparent;background:transparent;font-size:13px;color:var(--muted)}
-#periodBar button[aria-pressed=true],#periodBar button.active{background:white;color:#1759bb;border-color:#d7e2f2;box-shadow:0 1px 3px #29354610;font-weight:600}
+#periodBar button[aria-pressed=true],#periodBar button.active{background:white;color:var(--exe-brand-click);border-color:#d7e2f2;box-shadow:0 1px 3px #29354610;font-weight:600}
 #periodBar svg{width:12px;height:12px}
 .search-controls{display:flex;align-items:center;gap:8px}
 .keyword{display:flex;align-items:center;gap:8px;height:36px;border:1px solid var(--field);border-radius:6px;padding:0 10px;color:var(--muted)}
 .keyword input{border:0;background:transparent;height:100%;width:160px;outline:0;color:var(--ink)}
-.keyword:focus-within{border-color:#5891ef}
+.keyword:focus-within{border-color:var(--exe-brand)}
 .keyword input::placeholder{color:var(--muted)}
 #resultStatus{height:36px;padding:0 10px;border:1px solid var(--field);border-radius:6px;background:white}
 #rangePopover{position:absolute;top:calc(100% + 8px);left:0;z-index:4;width:280px;background:white;padding:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 24px #25355120}
@@ -29,7 +29,7 @@
 .item-title{font-weight:600;font-size:14px;line-height:20px;overflow-wrap:anywhere}
 .item-meta,.source{color:var(--muted);font-size:12px;line-height:18px}
 .item-meta{margin-top:4px}.hours{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
-.status{font-size:13px}.action button,.record-action{background:transparent;border:0;color:#245bb4;font-weight:550;padding:6px 0}
+.status{font-size:13px}.action button,.record-action{background:transparent;border:0;color:var(--exe-brand-click);font-weight:550;padding:6px 0}
 #detailDialog{width:min(420px,90vw);border:1px solid var(--border);border-radius:10px;color:var(--ink);padding:20px}
 #detailDialog::backdrop{background:#1b2d4938}#detailDialog header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}#detailClose{width:32px;height:32px;font-size:20px;border:0}#detailContent{line-height:1.7}
 .day-label span{margin-left:8px;color:var(--muted);font-size:12px;font-weight:400}
@@ -37,10 +37,10 @@
 .record-row{padding-top:15px;padding-bottom:15px}
 .status-label{display:inline-flex;align-items:center;gap:6px;font-size:12px}
 .status-label::before{content:"";width:6px;height:6px;background:currentColor;border-radius:50%}
-.status-label.success{color:#326658}.status-label.failed{color:#8a4a12}.status-label.pending{color:#325eae}
+.status-label.success{color:#326658}.status-label.failed{color:#8a4a12}.status-label.pending{color:var(--exe-brand-click)}
 .failure-reason{margin:4px 0 0;font-size:12px;line-height:18px}
 .record-detail{margin:0}.record-detail>div{display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;padding:7px 0}.record-detail dt{color:var(--muted)}.record-detail dd{margin:0;overflow-wrap:anywhere}
-.empty-state{padding:56px 16px;text-align:center;color:var(--muted)}.empty-state button{padding:6px 14px;color:#245bb4}
+.empty-state{padding:56px 16px;text-align:center;color:var(--muted)}.empty-state button{padding:6px 14px;color:var(--exe-brand-click)}
 .item-meta span+span::before{content:" · ";color:#758397;margin:0 4px}
 .empty-state{display:grid;justify-items:center;gap:12px}
 .record-main{min-width:0}

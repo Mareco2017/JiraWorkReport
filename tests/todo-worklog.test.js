@@ -57,6 +57,24 @@ test('修改一笔工时支持只改日期或工时，已登记的一笔不可�
  await assert.rejects(f.todos.call('todoUpdateWorkLog',{todoId:id,entryId,workLog:{hours:3}}),e=>e.code==='TODO_VALIDATION');
 });
 
+test('单笔描述持久化并带入，旧记录沿用待办标题，工单仍可取自待办标题',async t=>{
+ const f=await fixture(t),id=await created(f,'EXEPD-123 待办标题');
+ const first=(await f.todos.call('todoAddWorkLog',{todoId:id,workLog:entry(1,{description:'  补充报表筛选  '})})).id;
+ const legacy=(await f.todos.call('todoAddWorkLog',{todoId:id,workLog:entry(1)})).id;
+ await assert.rejects(f.todos.call('todoAddWorkLog',{todoId:id,workLog:entry(1,{description:3})}),{field:'description'});
+ const service=new WorkbenchService({store:new Store(f.root),defaultProject:'EXEPD'});
+ const load=async()=>(await service.call('importTodos',{entryIds:[first,legacy]})).records;
+ const [described,old]=await load();
+ assert.deepEqual([described.title,described.issue,old.title],['补充报表筛选','EXEPD-123','EXEPD-123 待办标题']);
+ await service.call('todoUpdateWorkLog',{todoId:id,entryId:first,workLog:{description:'整理验收记录'}});
+ assert.equal((await load())[0].title,'整理验收记录');
+ await service.call('saveDraft',{record:{...(await load())[0],title:'批量已手改'}});
+ await service.call('todoUpdateWorkLog',{todoId:id,entryId:first,workLog:{description:''}});
+ const [conflict]=await load();
+ assert.equal(conflict.title,'批量已手改');
+ assert.deepEqual(conflict.todoConflicts,{title:{previous:'整理验收记录',current:'EXEPD-123 待办标题'}});
+});
+
 test('删除一笔：未登记直接删，已登记需 force',async t=>{
  const f=await fixture(t);const id=await created(f,'删除');
  const a=(await f.todos.call('todoAddWorkLog',{todoId:id,workLog:entry(1)})).id;

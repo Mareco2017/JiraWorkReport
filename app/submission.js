@@ -54,7 +54,7 @@ export class SubmissionService {
 
   async wait(id) { await this.jobs.get(id); return this.getBatch(id); }
 
-  /** 只核对已确认的快照，不在用户不知情时改工时后提交。 */
+  /** 只核对已确认的来源快照，日期、工时或事项变更都须回到填报确认。 */
   async checkTodoSources(items) {
     const rows=items.filter(row=>row.todoEntryId);
     if(!rows.length || !this.loadTodoEntries)return;
@@ -64,7 +64,8 @@ export class SubmissionService {
       if(!entry || entry.todoId!==row.todoId)throw jiraError('TODO_REMOVED','原待办工时已删除，请返回填报刷新。');
       if(entry.state==='submitted')throw jiraError('ALREADY_SUBMITTED','原待办工时已登记，请刷新。');
       const origin=row.todoOrigin||row;
-      if(origin.day!==entry.day || origin.hours!==entry.hours || Object.keys(row.todoConflicts||{}).length){
+      const sourceTitle=row.todoOrigin?.title??row.sourceText;
+      if(origin.day!==entry.day || origin.hours!==entry.hours || (sourceTitle!==undefined&&sourceTitle!==entry.title) || Object.keys(row.todoConflicts||{}).length){
         throw jiraError('TODO_CHANGED','待办工时已变化，请返回填报，重新带入并核对。');
       }
     }

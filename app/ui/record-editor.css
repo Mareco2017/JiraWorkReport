@@ -19,7 +19,7 @@
 .record-editor .record-editor-error{margin:0 0 16px;color:#a13c3c;font-size:13px;line-height:22px}
 .record-editor footer{display:flex;justify-content:flex-end;gap:10px}
 .record-editor footer button{height:36px;min-width:72px;padding:0 16px;font-size:13px}
-.record-editor .record-editor-save{background:#35AA7B;border-color:#35AA7B;color:white}
+.record-editor .record-editor-save{background:var(--exe-brand);border-color:var(--exe-brand);color:white}
 .record-editor [aria-invalid=true]{border-color:#bf7777}
 .record-editor input:disabled,.record-editor .date-picker:disabled{background:#f4f6f9;color:#7c899b}
 .record-editor button:disabled{opacity:.6;cursor:wait}

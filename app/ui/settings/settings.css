@@ -14,7 +14,7 @@
 .badge::before{content:'';height:6px;width:6px;border-radius:50%;background:currentColor}
 .badge.connected,.badge.success{color:#246248;background:#e9f4ed}
 .badge.warning,.badge.error{color:#864f14;background:#fff2dd}
-.badge.working{color:#2259a4;background:#eaf2ff}
+.badge.working{color:var(--exe-brand-click);background:var(--exe-brand-light)}
 .form-stack{display:grid;gap:18px;width:100%;max-width:490px}
 .field{display:grid;align-content:start;gap:7px;min-width:0}
 .field-label{font-size:13px;font-weight:600;color:#33445a}
@@ -23,9 +23,9 @@
 .field-help,.field-error{font-size:12px;line-height:18px;color:var(--muted);margin:0}
 .field-error{color:#994f28}
 .btn{min-height:36px;padding:6px 14px;font-size:13px;border:1px solid #ccd7e5;background:#fff;color:var(--text);border-radius:6px;font-weight:550}
-button.primary,.btn.primary{min-height:36px;padding:6px 16px;border-color:var(--blue);background:var(--blue);color:white;font-weight:600}
+button.primary,.btn.primary{min-height:36px;padding:6px 16px;border-color:var(--exe-brand);background:var(--exe-brand);color:white;font-weight:600}
 button.primary:disabled{background:#aab9ce;border-color:#aab9ce}
-.text-btn{padding:4px 0;border:0;background:transparent;color:#2057ac;font-size:13px}
+.text-btn{padding:4px 0;border:0;background:transparent;color:var(--exe-brand-click);font-size:13px}
 .btn:disabled,.text-btn:disabled{cursor:default;color:#78899e}
 .notice{display:block;background:#f1f5fa;color:var(--text);padding:10px 12px;border-radius:6px;font-size:13px;line-height:20px}
 .notice.error{background:#fff6e9;color:#824900}

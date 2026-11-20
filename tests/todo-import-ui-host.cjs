@@ -80,6 +80,22 @@ app.whenReady().then(async()=>{
  assert.equal(await run("document.body.textContent.includes('带入规则')"),false);
  assert.match(await run("[...document.querySelectorAll('.todo-group-meta')].map(n=>n.textContent).join('|')"),/0\.5 h/,'组头显示未登记合计');
 
+ await run("document.querySelector('#todoSelectAll').click()");
+ assert.equal(await run("document.querySelectorAll('.todo-row[aria-pressed=true]').length"),4);
+ const marks=await run(`['#todoSelectAll .todo-mark','.todo-group-head .todo-mark','.todo-row .todo-mark'].map(selector=>{
+  const node=document.querySelector(selector),s=getComputedStyle(node);
+  return [s.width,s.height,s.border,s.backgroundColor,s.color,getComputedStyle(node,'::before').content];
+ })`);
+ assert.deepEqual(marks[0],marks[1]);
+ assert.deepEqual(marks[0],marks[2]);
+ assert.equal(marks[0][3],'rgb(53, 170, 123)');
+ if(process.argv[3]){
+  await run('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  await require('node:fs/promises').writeFile(process.argv[3],(await window.webContents.capturePage()).toPNG());
+ }
+ await run("document.querySelector('#todoSelectAll').click()");
+ assert.deepEqual(await run("[document.querySelector('#todoSelectAll').getAttribute('aria-pressed'),document.querySelectorAll('.todo-row[aria-pressed=true]').length]"),['false',0]);
+
  // 按笔勾选
  await run("document.querySelector('[data-entry-id=e2]').click()");
  await wait("!document.querySelector('#read').disabled");

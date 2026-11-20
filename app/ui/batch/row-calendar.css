@@ -1,11 +1,11 @@
 .edit-table .row-date-picker {
   display:flex; align-items:center; gap:4px; width:100%; height:var(--control-height);
   padding:0 7px; border:1px solid #cfd9e9; border-radius:6px;
-  background:#f8faff; color:var(--text); font-size:var(--text-field); font-weight:550; white-space:nowrap;
+  background:var(--exe-bg-tag); color:var(--text); font-size:var(--text-field); font-weight:550; white-space:nowrap;
 }
 .row-date-picker svg {width:14px; height:14px; color:#7c8aa0}
 .row-date-picker .chevron {width:12px; height:12px; margin-left:auto; stroke:#8796ad}
-.row-date-picker[aria-expanded=true] {border-color:#5DBB95}
+.row-date-picker[aria-expanded=true] {border-color:var(--exe-brand-hover)}
 .row-date-picker:disabled {color:#8b98aa; background:#f5f7fa}
 .edit-table .row-date-picker.missing {background:var(--warning-bg); border-color:var(--warning-border)}
 .edit-table .row-date-picker.invalid {border-color:#c67866}
@@ -24,12 +24,12 @@
 .row-calendar .calendar-weekdays, .row-calendar .calendar-days {display:grid; grid-template-columns:repeat(7,1fr); gap:4px; text-align:center}
 .row-calendar .calendar-weekdays {font-size:var(--text-note); color:var(--muted); margin-bottom:8px}
 .row-calendar .calendar-days button {position:relative; height:32px; border:0; background:white; padding:0; font-size:var(--text-field)}
-.row-calendar .calendar-days button:not(:disabled):hover {background:#EFF8F4}
-.row-calendar .calendar-days .current {box-shadow:inset 0 0 0 1px #a7c2ff; color:var(--blue)}
+.row-calendar .calendar-days button:not(:disabled):hover {background:var(--exe-brand-light)}
+.row-calendar .calendar-days .current {box-shadow:inset 0 0 0 1px var(--exe-brand-ring); color:var(--exe-brand)}
 .row-calendar .calendar-days button:disabled {color:#bac4d1; opacity:1}
-.row-calendar .calendar-days .chosen:not(:disabled) {background:var(--blue); color:white; box-shadow:none}
+.row-calendar .calendar-days .chosen:not(:disabled) {background:var(--exe-brand); color:white; box-shadow:none}
 .row-calendar .has-draft:after {content:''; position:absolute; width:3px; height:3px; border-radius:50%; background:currentColor; bottom:3px; left:calc(50% - 1.5px)}
 .row-calendar .calendar-caption {margin-top:12px; font-size:var(--text-note); color:var(--muted)}
 .row-calendar .calendar-actions {justify-content:flex-start; gap:6px; margin-top:12px; padding-top:11px; border-top:1px solid #eef1f6}
-.row-calendar .shortcut {height:28px; padding:0 10px; background:#f8faff; border-color:#d2dced; font-size:var(--text-field)}
-.row-calendar .clear-date {margin-left:auto; border:0; color:var(--blue); padding:4px; font-size:var(--text-field)}
+.row-calendar .shortcut {height:28px; padding:0 10px; background:var(--exe-bg-tag); border-color:#d2dced; font-size:var(--text-field)}
+.row-calendar .clear-date {margin-left:auto; border:0; color:var(--exe-brand); padding:4px; font-size:var(--text-field)}

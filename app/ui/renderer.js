@@ -3,12 +3,12 @@ import {templates} from './templates.js';
 import {typeMapping,monthlyTasks,requirementTasks,taskForType,isMonthlyType,validateRecord,isCompletedItem,HOUR_CHOICES,HOURS_ERROR,hoursValid} from '../worklogs.js';
 import {attachIssueClear,refreshIssueClear} from './issue-input.js';
 import {openRecordEditor} from './record-editor.js';
+import {bindWorkDate,closeCalendar,labelDay,workDateMarkup} from './work-date.js';
 
 const $ = selector=>document.querySelector(selector);
 const main=$('#content');
 const defaultCommonTypes=['需求分析','需求分析评审','概要设计','规格撰写','4.0应用开发','日常综合'];
 let snapshot, page='todo', types=Object.keys(typeMapping), selectedType='需求分析', issueSelection=null, selectedSubtask=null, selectedTask='', taskEdited=false, selectedFile=null, noteRecords=[], step=1, activeBatch=null;
-const localToday=()=>new Date().toLocaleDateString('sv-SE');
 const escapeText=value=>String(value ?? '').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const issueCache=new Map();
 async function cachedIssue(key) {
@@ -19,11 +19,11 @@ async function cachedIssue(key) {
 }
 const monthlySubtaskCache=new Map();
 const hoursButtonsHtml=()=>HOUR_CHOICES.map(value=>'<button type="button" class="chip" data-hours="'+value+'">'+value+'</button>').join('')+'<input id="hours" aria-label="自定义耗时" type="number" min="0.25" step="0.25" required>';
-const labelDay=day=>day ? new Date(day+'T12:00:00').toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'short'}) : '待定日期';
 const completedDay=value=>{const date=new Date(value);return Number.isNaN(date.getTime())?'':date.toLocaleDateString('sv-SE');};
 let toastTimer;
 const pageViews = new Map();
 let disposeTodo;
+let paintDailyDate;
 const submissionBatches = new Map();
 const releasedBatches = new Set();
 let drawerDesiredOpen = false;
@@ -118,7 +118,7 @@ async function navigate(next){
   while(main.firstChild)view.append(main.firstChild);
   pageViews.set(page,view);
  }
- document.querySelector('.date-popover')?.remove();document.querySelector('.hours-popover')?.remove();document.querySelector('.issue-results')?.remove();
+ closeCalendar();document.querySelector('.hours-popover')?.remove();document.querySelector('.issue-results')?.remove();
  page=next;
  // 待办不依赖initialize；原工时快照和缓存继续归原页面管理。
  if(page==='todo'){
@@ -153,33 +153,6 @@ async function navigate(next){
  if(page==='settings')await settings();
 }
 
-function calendar(anchor,value,onSelect,{min='',max=localToday()}={}){
- document.querySelector('.date-popover')?.remove();
- const popup=document.createElement('div');popup.className='date-popover';popup.setAttribute('role','dialog');popup.setAttribute('aria-label','选择工作日期');
- let shown=new Date((value||max)+'T12:00:00');
- const render=()=>{
-  popup.replaceChildren();
-  const head=document.createElement('div');head.className='date-head';
-  head.innerHTML='<button aria-label="上个月">‹</button><strong>'+shown.getFullYear()+'年'+(shown.getMonth()+1)+'月</strong><button aria-label="下个月">›</button>';
-  head.firstChild.onclick=()=>{shown=new Date(shown.getFullYear(),shown.getMonth()-1,1);render();};
-  head.lastChild.onclick=()=>{shown=new Date(shown.getFullYear(),shown.getMonth()+1,1);render();};popup.append(head);
-  const grid=document.createElement('div');grid.className='calendar-grid';
-  for(const weekday of ['一','二','三','四','五','六','日']){const span=document.createElement('span');span.textContent=weekday;grid.append(span);}
-  const first=(new Date(shown.getFullYear(),shown.getMonth(),1).getDay()+6)%7;
-  for(let i=0;i<first;i++)grid.append(document.createElement('span'));
-  for(let day=1;day<=new Date(shown.getFullYear(),shown.getMonth()+1,0).getDate();day++){
-   const key=shown.getFullYear()+'-'+String(shown.getMonth()+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
-   const button=document.createElement('button');button.textContent=day;button.disabled=key>max || Boolean(min && key<min);button.classList.toggle('current',key===value);button.setAttribute('aria-label',key);
-   button.onclick=()=>{onSelect(key);popup.remove();};grid.append(button);
-  }
-  popup.append(grid);
- };
- render();(anchor.closest('dialog')||document.body).append(popup);
- const rect=anchor.getBoundingClientRect();popup.style.left=Math.min(rect.left,innerWidth-280)+'px';popup.style.top=Math.min(rect.bottom+6,innerHeight-popup.offsetHeight-8)+'px';
- const close=event=>{if(!popup.contains(event.target)&&event.target!==anchor&&!anchor.contains(event.target)){popup.remove();document.removeEventListener('pointerdown',close);}};
- setTimeout(()=>document.addEventListener('pointerdown',close),0);
- popup.onkeydown=event=>{if(event.key==='Escape')popup.remove();};
-}
 function hourOptions(input,onValue){
  document.querySelector('.hours-popover')?.remove();
  const popup=document.createElement('div');popup.className='hours-popover';
@@ -213,6 +186,10 @@ function typeDialog(configure){
   dialog.querySelector('[data-save]').onclick=safe(async()=>{snapshot.config=await call('saveCommonTypes',{types:[...dialog.querySelectorAll('input:checked')].map(input=>input.value)});dialog.remove();renderDailyTypes();toast('常用类型已更新');});
  }
 }
+/** 提示紧贴对应字段标题，正常录入时收起说明，鼠标和键盘都能查看。 */
+function subtaskHelp(id,label,text){
+ return `<span class="field-help"><button type="button" class="help-button" aria-label="${label}说明" aria-describedby="${id}">?</button><span id="${id}" class="field-tooltip" role="tooltip">${text}</span></span>`;
+}
 function renderTask(){
  const input=$('#issue'),optional=Boolean(requirementTasks[selectedType]),day=$('#date').value;
  if(input.readOnly&&optional)input.value='';
@@ -231,7 +208,8 @@ function renderTask(){
  $('#monthlyStatus').textContent=binding?(optional?'使用月度工单 · ':'已创建 · ')+binding.key+' · '+binding.title:(optional?'未指定需求单时使用 ':'')+day.slice(0,7)+' 综合工时单 · 提交时查找或创建';
  const existing=monthly?(binding?monthlySubtaskCache.get(binding.key)||[]:[]):(issueSelection?.subtasks||[]);
  const exists=existing.some(row=>(row.title||row.fields?.summary)===selectedTask);
- $('#subtasks').innerHTML='<input id="taskName" aria-label="子任务名称" maxlength="255" autocomplete="off" value="'+escapeText(selectedTask)+'" placeholder="填写子任务名称"><p class="target-note" id="taskNote">'+escapeText(exists?'已存在同名子任务，提交时复用':'提交时自动创建同名子任务')+'</p><p class="field-error" id="task-error" role="alert" hidden></p>';
+ $('#taskNameHelp').innerHTML=subtaskHelp('taskNote','子任务名称',exists?'已存在同名子任务，提交时复用':'提交时自动创建同名子任务');
+ $('#subtasks').innerHTML='<input id="taskName" maxlength="255" autocomplete="off" value="'+escapeText(selectedTask)+'" placeholder="填写子任务名称"><p class="field-error" id="task-error" role="alert" hidden></p>';
  $('#taskName').oninput=event=>{selectedTask=event.target.value;taskEdited=true;setError($('#task-error'),'');};
  if(monthly&&!optional&&binding&&!monthlySubtaskCache.has(binding.key)){
   monthlySubtaskCache.set(binding.key,[]);
@@ -249,17 +227,18 @@ function renderSubtaskChoice(task,monthly,binding){
  const current=selectedSubtask?.key||'';
  // 已确认：日填报始终展示全部子任务（含已完成），不再提供开关。
  const visible=options;
+ const help=subtaskHelp('subtaskNumberNote','子任务工单号','留空自动匹配或创建');
  if(current&&!visible.some(row=>row.key===current)){
   const chosen=options.find(row=>row.key===current);if(chosen)visible.unshift(chosen);
  }
  if(visible.length&&(!current||visible.some(row=>row.key===current))){
-  host.innerHTML='<div class="label-row"><span class="field-label">子任务工单</span><span class="auto-tag">留空自动匹配或创建</span></div><select id="subtaskSelect" aria-label="选择子任务工单"><option value="">自动匹配或创建「'+escapeText(task)+'」</option>'+visible.map(row=>'<option value="'+escapeText(row.key)+'" '+(row.key===current?'selected':'')+'>'+escapeText(row.key+' · '+row.title+(row.statusCategory==='done'?'（已完成）':''))+'</option>').join('')+'</select>';
+  host.innerHTML='<div class="label-row has-help"><label for="subtaskSelect">子任务工单号</label>'+help+'</div><select id="subtaskSelect" aria-label="选择子任务工单"><option value="">自动匹配或创建「'+escapeText(task)+'」</option>'+visible.map(row=>'<option value="'+escapeText(row.key)+'" '+(row.key===current?'selected':'')+'>'+escapeText(row.key+' · '+row.title+(row.statusCategory==='done'?'（已完成）':''))+'</option>').join('')+'</select>';
   $('#subtaskSelect').onchange=event=>{
    const key=event.target.value,row=visible.find(item=>item.key===key);
    selectedSubtask=key?{key,title:row?.title||''}:null;renderTask();
   };
  }else{
-  host.innerHTML='<div class="label-row"><span class="field-label">子任务工单号</span><span class="auto-tag">留空自动匹配或创建</span></div><input id="subtaskInput" aria-label="子任务工单号" autocomplete="off" placeholder="例如 EXEPD-105" value="'+escapeText(current)+'">'+(selectedSubtask?.key?'<p class="target-note">已选：'+escapeText(selectedSubtask.title||selectedSubtask.key)+(monthly?' · 提交时校验月度归属':'')+'</p>':'');
+  host.innerHTML='<div class="label-row has-help"><label for="subtaskInput">子任务工单号</label>'+help+'</div><input id="subtaskInput" autocomplete="off" placeholder="例如 EXEPD-105" value="'+escapeText(current)+'">'+(selectedSubtask?.key?'<p class="target-note">已选：'+escapeText(selectedSubtask.title||selectedSubtask.key)+(monthly?' · 提交时校验月度归属':'')+'</p>':'');
   $('#subtaskInput').onchange=event=>{
    const key=event.target.value.trim().toUpperCase();
    selectedSubtask=key?{key,title:''}:null;renderTask();
@@ -299,11 +278,9 @@ function issueSearch(input,chosen,onQuery=()=>{}){
 function daily(){
  // 工时快捷块由统一常量生成，避免模板与校验规则各写一份。
  $('#hoursButtons').innerHTML=hoursButtonsHtml();
- $('#date').value=snapshot.today;$('#dateLabel').textContent=labelDay(snapshot.today);
- const shortcuts=[snapshot.today,new Date(new Date(snapshot.today+'T12:00:00').getTime()-86400000).toLocaleDateString('sv-SE')];
- document.querySelectorAll('[data-date]').forEach((button,index)=>button.onclick=()=>{setDay(shortcuts[index]);});
- const setDay=day=>{$('#date').value=day;$('#dateLabel').textContent=labelDay(day);document.querySelectorAll('[data-date]').forEach((button,index)=>button.classList.toggle('selected',day===shortcuts[index]));renderTask();};
- $('#dateButton').onclick=()=>calendar($('#dateButton'),$('#date').value,setDay,{max:snapshot.today});
+ const dateRow=$('#dailyWorkDate');dateRow.innerHTML=workDateMarkup('dateButton','dateLabel');
+ $('#date').value=snapshot.today;
+ paintDailyDate=bindWorkDate(dateRow,{value:snapshot.today,today:snapshot.today,onSelect:day=>{$('#date').value=day;renderTask();}});
  const syncHours=()=>document.querySelectorAll('[data-hours]').forEach(button=>button.classList.toggle('selected',Number($('#hours').value)===Number(button.dataset.hours)));
  document.querySelectorAll('[data-hours]').forEach(button=>button.onclick=()=>{$('#hours').value=button.dataset.hours;syncHours();});
  $('#hours').addEventListener('input',syncHours);
@@ -345,7 +322,7 @@ function renderQueue(){
    const item=document.createElement('article');item.className='record';item.innerHTML='<div class="record-body"><div class="record-title">'+escapeText(row.title)+'</div><div class="record-meta"><span>'+escapeText(row.issue ? row.issue+(row.issueTitle?' - '+row.issueTitle:'') : '当月综合工时单')+'</span><span>'+escapeText(row.task)+'</span><span>'+escapeText(row.type)+'</span></div></div><div class="record-hours">'+row.hours+'<small>h</small></div><div class="record-state">待提交</div><div class="record-actions"><button data-edit>编辑</button><button data-copy>复制</button><button data-delete>删除</button></div>';
    item.querySelector('.record-title').title=row.title;
    item.querySelector('[data-edit]').onclick=()=>{
-    $('#entry').dataset.editId=row.id;$('#date').value=row.day;$('#dateLabel').textContent=labelDay(row.day);$('#description').value=row.title;$('#hours').value=row.hours;selectedType=row.type;
+    $('#entry').dataset.editId=row.id;$('#date').value=row.day;paintDailyDate(row.day);$('#description').value=row.title;$('#hours').value=row.hours;selectedType=row.type;
     // Returned monthly rows can contain the resolved parent key; only a requirement task represents a user-picked requirement.
     issueSelection=row.issue&&!isMonthlyType(row.type,Boolean(row.issue))?{key:row.issue,title:row.issueTitle}:null;
     selectedSubtask=row.subtaskKey?{key:row.subtaskKey,title:row.subtaskTitle||''}:null;
@@ -389,7 +366,8 @@ function updateImportControls(){
  batch$('#read').disabled=importBusy||!ready;
  batch$('#read').hidden=importBusy;batch$('#readProgress').hidden=!importBusy;batch$('#sourceHint').hidden=importBusy;
  batch$('#sourceHint').textContent=todoHintText();
- for(const node of batchRoot().querySelectorAll('.week-file:not(.todo-row),#localTab,#pasteTab,#todoTab,#changeDirectory,#pasteInput ,#todoRefresh,#todoSelectAll'))node.disabled=importBusy;
+ for(const node of batchRoot().querySelectorAll('.week-file:not(.todo-row),#localTab,#pasteTab,#todoTab,#changeDirectory,#pasteInput ,#todoRefresh'))node.disabled=importBusy;
+ batch$('#todoSelectAll').disabled=importBusy||!todoList.some(todo=>pendingEntries(todo).length);
  // 已登记的待办行始终保持只读，不能被忙碌状态的统一开关重新启用。
  for(const node of batchRoot().querySelectorAll('#todoRows .todo-row'))node.disabled=importBusy;
  batch$('#step2').disabled=importBusy||!noteRecords.length;batch$('#step3').disabled=importBusy||!noteRecords.length;
@@ -424,7 +402,7 @@ function mountTodoSource(){
  toolbar.prepend(tab);
  const panel=document.createElement('section');
  panel.id='todoSource';panel.className='local-source todo-source';panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby','todoTab');panel.hidden=true;
- panel.innerHTML='<div class="directory-bar"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#check"/></svg><span class="directory-label">待办工时</span><span id="todoSummary" class="directory-path"></span><button type="button" id="todoSelectAll" class="quiet-link">全选</button><button type="button" id="todoRefresh" class="quiet-link">刷新</button></div>'+
+ panel.innerHTML='<div class="directory-bar"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#check"/></svg><span class="directory-label">待办工时</span><span id="todoSummary" class="directory-path"></span><button type="button" id="todoSelectAll" class="quiet-link" aria-pressed="false"><span class="todo-mark" aria-hidden="true"></span>全选</button><button type="button" id="todoRefresh" class="quiet-link">刷新</button></div>'+
   '<div class="file-workspace todo-workspace"><section class="file-picker" aria-labelledby="todoListTitle"><div class="choose-heading"><h2 id="todoListTitle">待办</h2><span id="todoCount">0 条</span></div><div id="todoRows" class="week-files todo-rows" role="group" aria-label="可带入的待办工时"></div></section></div>';
  batch$('#choosePanel').querySelector('.source-toolbar').after(panel);
  batch$('#todoRefresh').onclick=safe(()=>loadCompletedTodos({announce:true}));
@@ -477,6 +455,8 @@ function paintTodoRows(){
  if(!list)return;
  list.replaceChildren();
  const groups=todoList.map(todo=>({todo,entries:pendingEntries(todo)})).filter(group=>group.entries.length);
+ const selectAll=batch$('#todoSelectAll');
+ selectAll.setAttribute('aria-pressed',String(groups.length>0&&groups.every(({entries})=>entries.every(entry=>todoSelection.has(entry.id)))));
  if(!groups.length){
   list.innerHTML='<div class="source-empty"><svg aria-hidden="true"><use href="#check"/></svg><strong>没有待带入的工时</strong><p>可前往待办记录工时。</p></div>'+
     '<div class="todo-empty-link"><button type="button" class="quiet-link" data-open-todo>前往待办</button></div>';
@@ -488,7 +468,7 @@ function paintTodoRows(){
   const box=document.createElement('div');box.className='todo-group';
   const total=entries.reduce((sum,entry)=>sum+Number(entry.hours||0),0);
   const head=document.createElement('div');head.className='todo-group-head';
-  const mark=document.createElement('input');mark.type='checkbox';mark.className='todo-group-check';
+  const mark=document.createElement('input');mark.type='checkbox';mark.className='todo-mark';
   mark.checked=entries.every(entry=>todoSelection.has(entry.id));
   mark.setAttribute('aria-label','选择「'+todo.title+'」的全部未登记工时');
   mark.onchange=()=>{for(const entry of entries){if(mark.checked)todoSelection.add(entry.id);else todoSelection.delete(entry.id);}paintTodoRows();updateImportControls();};
@@ -502,7 +482,7 @@ function paintTodoRows(){
    button.dataset.entryId=entry.id;
    const on=todoSelection.has(entry.id);
    button.classList.toggle('selected',on);button.setAttribute('aria-pressed',String(on));
-   button.innerHTML='<span class="todo-mark" aria-hidden="true">'+(on?'✓':'')+'</span><strong>'+escapeText(entryDayLabel(entry.day))+' · '+escapeText(String(entry.hours))+' h</strong><span class="file-range">未登记</span>';
+   button.innerHTML='<span class="todo-mark" aria-hidden="true"></span><strong>'+escapeText(entryDayLabel(entry.day))+' · '+escapeText(String(entry.hours))+' h</strong>'+(entry.description?'<span class="todo-entry-description">'+escapeText(entry.description)+'</span>':'')+'<span class="file-range">未登记</span>';
    button.onclick=()=>{if(todoSelection.has(entry.id))todoSelection.delete(entry.id);else todoSelection.add(entry.id);paintTodoRows();updateImportControls();};
    box.append(button);
   }
@@ -730,8 +710,8 @@ function renderBatchRows(){
    markMissing();
 
    for(const [field,change] of Object.entries(row.todoConflicts||{})){
-    const cell=field==='day'?tr.querySelector('[data-day]').parentElement:tr.querySelector('[data-field=hours]').parentElement;
-    const choice=document.createElement('select'),label=field==='day'?'工作日期':'工时';
+    const cell=tr.querySelector(field==='day'?'[data-day]':`[data-field=${field}]`).parentElement;
+    const choice=document.createElement('select'),label={day:'工作日期',hours:'工时',title:'工作事项'}[field];
     choice.setAttribute('aria-label','选择'+label+'采用待办或草稿');
     choice.add(new Option('待办'+label+'已变更，请选择',''));
     choice.add(new Option('使用待办：'+change.current,'source'));
@@ -1027,7 +1007,7 @@ function history(){
     const canRetry=row.status!=='success'&&row.retryable&&row.batchId;
     const item=document.createElement('div');item.className='record-row';item.innerHTML='<div class="record-main"><div class="item-title">'+escapeText(row.title)+'</div><div class="item-meta">'+escapeText((row.targetKey || row.issue)+(row.issueTitle?' - '+row.issueTitle:''))+' · '+escapeText(row.subtaskTitle?row.task+' → '+row.subtaskTitle:row.task)+' · '+escapeText(row.type)+'</div>'+(row.error?'<p class="failure-reason">'+escapeText(row.error)+'</p>':'')+'</div><span class="source">'+escapeText(row.source || '按天填报')+'</span><span class="hours">'+row.hours+' h</span><div class="status"><span class="status-label '+(row.status==='success'?'success':'failed')+'">'+(row.status==='success'?'已登记':'失败')+'</span></div><div class="action"><button data-edit-record '+(row.status==='uncertain'?'disabled title="请先核对提交结果"':'')+'>编辑</button><button data-record-open>'+(canRetry?'重试':'查看工单')+'</button><button class="delete-record" data-delete-record '+(row.status==='uncertain'?'disabled title="请先核对提交结果"':'')+'>删除</button></div>';
     item.querySelector('[data-delete-record]').onclick=()=>confirmDeleteRecord(row,render);
-    item.querySelector('[data-edit-record]').onclick=()=>openRecordEditor({row,today:snapshot.today,calendar,hourOptions,save:async changes=>{
+    item.querySelector('[data-edit-record]').onclick=()=>openRecordEditor({row,today:snapshot.today,hourOptions,save:async changes=>{
      const updated=await call('updateRecord',{id:row.id,changes});
      noteRecords=noteRecords.map(record=>record.id===row.id?{...record,title:updated.title,day:updated.day,hours:updated.hours}:record);
      await refresh();render();toast(row.worklogId?'填报记录及 JIRA 工时已更新':'填报记录已更新');
@@ -1061,8 +1041,7 @@ async function settings(){
  await mountSettings({host:main,call,refresh,getSnapshot:()=>snapshot,toast,editJira:repairJiraConnection,onResume:activeBatch?async()=>{const batch=await call('getBatch',{id:activeBatch});await navigate(batchSource(batch).startsWith('batch/')?'batch':'daily');await showBatch(batch,{open:true});}:null});
  repairJiraConnection=false;
 }
-// The editor owns Escape even after a calendar rerender moves focus to body; its cancel handler must see the open picker first.
-window.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.querySelector('.record-editor[open]')){document.querySelector('.date-popover')?.remove();document.querySelector('.hours-popover')?.remove();}});
+window.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.querySelector('.record-editor[open]'))document.querySelector('.hours-popover')?.remove();});
 navigate('todo').catch(error=>{main.innerHTML='<header class="topbar"><h1>JIRA工时填报</h1></header><p>'+escapeText(error.message)+'</p><button id="retryLoad">重新打开</button>';$('#retryLoad').onclick=()=>location.reload();});
 
 // 启动直接展示待办；宿主连接摘要仍读取既有本机配置，不阻塞待办入口。

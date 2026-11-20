@@ -6,7 +6,7 @@ app.whenReady().then(async()=>{
  const store=new Store(process.argv[2]);await store.saveConfig({jira:{url:'https://fixture.invalid',username:'fixture-user',keyRef:'fixture'},agent:{engine:'Codex CLI'}});
  let initializeCount=0;const service=new WorkbenchService({store,createJira(){throw Error('Unexpected remote call');}});
  ipcMain.handle('workbench:call',async(_,command,payload)=>{if(command==='initialize')initializeCount++;try{return {ok:true,value:await service.call(command,payload)};}catch(error){return {ok:false,error:error.message,code:error.code,field:error.field};}});
- const win=new BrowserWindow({show:false,width:1250,height:750,webPreferences:{preload:path.resolve('app/preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ const win=new BrowserWindow({show:false,width:1200,height:750,webPreferences:{preload:path.resolve('app/preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
  const run=code=>win.webContents.executeJavaScript(code);
  const wait=async code=>{for(let i=0;i<160;i++){if(await run(code))return;await new Promise(r=>setTimeout(r,20));}throw Error('UI timeout '+code);};
  const ready={daily:'Boolean(document.querySelector("#description"))',todo:'Boolean(document.querySelector("#newTodo"))&&!document.querySelector("#newTodo").disabled',batch:'Boolean(document.querySelector("#localTab"))',history:'Boolean(document.querySelector("#recordList"))',settings:'Boolean(document.querySelector(".setting-panel"))'};
@@ -16,7 +16,9 @@ app.whenReady().then(async()=>{
   return {sidebar:style(document.querySelector('.sidebar')),brand:style(document.querySelector('.brand')),label:style(document.querySelector('.sidebar>.nav-label')),active:style(document.querySelector('.nav-item.active')),inactive:style(document.querySelector('.nav-item:not(.active)')),bottom:style(document.querySelector('.sidebar-bottom')),box:style(document.querySelector('.statusbox')),rows:[...document.querySelectorAll('.status-row')].map(style),values:[...document.querySelectorAll('.status-value')].map(style)};
  })()`);
  await win.loadFile(path.resolve('app/ui/index.html'));await wait("document.querySelector('.status-value').textContent.includes('fixture-user')");await wait(ready.todo);
- for(const size of [[1250,750],[1024,720]]){
+ const brand=await run("getComputedStyle(document.querySelector('#newTodo')).backgroundColor");
+ assert.equal(brand,'rgb(53, 170, 123)');
+ for(const size of [[1200,750],[1024,720]]){
   win.setContentSize(...size);await go('daily');const baseline=await measure();
   if(process.argv[3]==='baseline'){
    await fs.writeFile(path.join(process.argv[2],`daily-${size[0]}.png`),(await win.webContents.capturePage()).toPNG());await fs.writeFile(path.join(process.argv[2],`daily-${size[0]}.json`),JSON.stringify(baseline,null,2));continue;
@@ -30,6 +32,8 @@ app.whenReady().then(async()=>{
    assert.deepEqual(current,baseline,`sidebar must match daily on ${page} at ${size}`);
    assert.deepEqual(await run('window.sidebarChanges'),[],`unchanged sidebar must not rebuild on ${page}`);
    assert.equal(await run("document.querySelector('.sidebar')===window.sidebarRoot && document.querySelector('.status-value i')===window.connectionDot"),true);
+   assert.equal(await run("getComputedStyle(document.querySelector('.brand-mark')).backgroundColor"),brand);
+   if(process.argv[3]==='preview')await fs.writeFile(path.join(process.argv[2],`${page}-${size[0]}.png`),(await win.webContents.capturePage()).toPNG());
   }
   const count=initializeCount;await go('daily');assert.equal(initializeCount,count,'active menu click should not refresh');
  }

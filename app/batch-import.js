@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {realpath} from 'node:fs/promises';
 import {join} from 'node:path';
 import {typeMapping} from './worklogs.js';
-import {refreshTodoDraft} from './todo-data.js';
+import {refreshTodoDraft,todoWorkLogOrigin} from './todo-data.js';
 
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const invalid=()=>Object.assign(new Error('Agent 未返回有效的原文证据，请核对内容后重试'),{code:'INVALID_EXTRACTION'});
@@ -97,9 +97,10 @@ export class BatchImportService {
   if(!entries.length)return {source,records:[],outcome:'registered'};
   entries.sort((a,b)=>String(b.entry.day||'').localeCompare(String(a.entry.day||''))||String(a.todo.title||'').localeCompare(String(b.todo.title||'')));
   const records=entries.map(({todo,entry},index)=>{
-   const title=String(todo.title||'').trim();
-   const issue=project?projectIssue(title,project):'';
-   return {id:todoEntryRecordId(entry.id),todoId:todo.id,todoEntryId:entry.id,title,day:entry.day,hours:entry.hours,todoOrigin:{day:entry.day,hours:entry.hours},type:'',task:'',issue,issueTitle:'',issueQuery:issue,source:'批量填报',importSourceId:'todo:'+todo.id,sourceKind:'todo',sourceName:'待办工时',sourceHash:source.contentHash,sourceFile:'',sourceLine:index+1,sourceStart:0,sourceEnd:title.length,sourceText:title,missing:['type']};
+   const todoOrigin=todoWorkLogOrigin(entry,todo.title);
+   const {title}=todoOrigin;
+   const issue=project?(projectIssue(title,project)||projectIssue(todo.title,project)):'';
+   return {id:todoEntryRecordId(entry.id),todoId:todo.id,todoEntryId:entry.id,...todoOrigin,todoOrigin,type:'',task:'',issue,issueTitle:'',issueQuery:issue,source:'批量填报',importSourceId:'todo:'+todo.id,sourceKind:'todo',sourceName:'待办工时',sourceHash:source.contentHash,sourceFile:'',sourceLine:index+1,sourceStart:0,sourceEnd:title.length,sourceText:title,missing:['type']};
   });
   const next=await this.store.update(scope,current=>{
    for(const row of records){
