@@ -27,6 +27,11 @@
 
 应用当前适配 JIRA Server 与 Tempo 的特定工单类型、自定义字段和工时规则。接入其他站点前，需要核对该站点的字段与权限；具体配置见项目说明。
 
+## 版本发布
+
+- [v0.2.0](https://github.com/Mareco2017/JiraWorkReport/releases/tag/v0.2.0)：待办工时与批量填报整合，调整窗口、绿色主题、日期控件和表单提示；提供 Apple 芯片 Mac、Intel Mac、Windows x64 的 ZIP 及 SHA-256 校验文件。
+- [v0.1.0](https://github.com/Mareco2017/JiraWorkReport/releases/tag/v0.1.0)：首个公开版本，包含个人待办及日历。
+
 ## 当前验证
 
 2026-11-10 首次公开托管准备时，现有 112 项自动测试全部通过（包含本机配置迁移与原数据分区的回归验证）。测试不代表目标电脑上的真实 JIRA、模型服务或 Windows 实机验收。
