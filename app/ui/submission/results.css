@@ -20,7 +20,7 @@ dialog#submissionView::backdrop{background:rgba(29,44,65,.24)}
 .result-tally{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end;font-size:13px}
 .result-good{color:#306255}.result-warn{color:#854900}
 .result-progress{appearance:none;width:132px;height:4px;border:0;border-radius:4px;background:#d8e1ef;overflow:hidden}
-.result-progress::-webkit-progress-bar{background:#d8e1ef}.result-progress::-webkit-progress-value{background:#1762ed}.result-progress::-moz-progress-bar{background:#1762ed}
+.result-progress::-webkit-progress-bar{background:#d8e1ef}.result-progress::-webkit-progress-value{background:#35AA7B}.result-progress::-moz-progress-bar{background:#35AA7B}
 .result-rows{overflow:auto;flex:1;min-height:0;border-top:1px solid #e6ecf3}
 .result-row{padding:15px 20px;border-bottom:1px solid #e8edf4}
 .result-row-top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
@@ -39,7 +39,7 @@ dialog#submissionView::backdrop{background:rgba(29,44,65,.24)}
 .result-fix{display:flex;align-items:center;gap:8px;margin-top:8px}
 .result-fix select{border:1px solid #cfdaea;border-radius:5px;padding:5px;font:inherit}
 .result-footer{min-height:64px;flex:none;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:0 20px;border-top:1px solid #e3eaf3}
-.submission-view .result-continue{height:38px;padding:0 16px;color:white;background:#1762ed;border:1px solid #1762ed;border-radius:6px;font-size:13px;font-weight:550;cursor:pointer}
+.submission-view .result-continue{height:38px;padding:0 16px;color:white;background:#35AA7B;border:1px solid #35AA7B;border-radius:6px;font-size:13px;font-weight:550;cursor:pointer}
 @container(max-width:520px){.result-header,.result-row,.result-footer{padding-left:16px;padding-right:16px}.result-summary{margin-left:16px;margin-right:16px;padding:12px 16px}.result-tally{gap:6px}.result-row-top{align-items:flex-start}}
 .result-history{color:#245bb4;text-decoration:none;font-size:13px;font-weight:550}
 .result-history:hover{text-decoration:underline}

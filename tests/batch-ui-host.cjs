@@ -6,7 +6,7 @@ const {createHash}=require('node:crypto');
 app.whenReady().then(async()=>{
  const record={id:'r1',title:'梳理需求',day:'2026-11-09',hours:2,type:'需求分析',task:'需求调研及分析',issue:'DEMO-100' ,source:'批量填报',importSourceId:'file-key'};
  const state={drafts:[],history:[],batches:[],settings:{},bindings:{}};
- const commands=[];let parseFailure=false,registered=false,legacyInitial=false,suspendParse=false,releaseParse=null;const recoveryBatches=new Map();let resubmission=0;
+ const commands=[];let parseFailure=false,registered=false,legacyInitial=false,suspendParse=false,releaseParse=null;const recoveryBatches=new Map();let resubmission=0,failNextBatch=false;
  ipcMain.handle('workbench:call',async(_,name,payload)=>{
   commands.push({name,payload});let value;
   if(name==='initialize')value={config:{notesDirectory:'/fictional/documents',commonTypes:[]},state,today:'2026-11-10',runtimes:{}};
@@ -22,7 +22,9 @@ app.whenReady().then(async()=>{
   }else if(name==='getBatch')value=recoveryBatches.get(payload.id)||{id:'original-batch',running:false,items:[{...record,id:'p1',importSourceId:'paste-key',status:'success',worklogId:'fixture-existing'}]};
   else if(name==='retry')value=recoveryBatches.get(payload.batchId);
   else if(name==='returnToDrafts'){const batch=recoveryBatches.get(payload.batchId);batch.returnedToDrafts=true;state.drafts=batch.items.map(item=>({...item}));value=state;}
-  else if(name==='startSubmission'){value={id:'resubmitted-'+(++resubmission),running:false,items:payload.records.map(item=>({...item,status:'success',worklogId:'recovered-worklog'}))};recoveryBatches.set(value.id,value);state.batches.push(value);}
+  else if(name==='startSubmission'){
+  if(failNextBatch){failNextBatch=false;value={id:'failed-batch',running:false,items:payload.records.map(item=>({...item,status:'failed',error:'模拟上传失败',retryable:true,batchId:'failed-batch'}))};}
+  else value={id:'resubmitted-'+(++resubmission),running:false,items:payload.records.map(item=>({...item,status:'success',worklogId:'recovered-worklog'}))};recoveryBatches.set(value.id,value);state.batches.push(value);}
   else if(name==='saveDraft'){const index=state.drafts.findIndex(row=>row.id===payload.record.id);if(index>=0)state.drafts[index]=payload.record;value=state;}
   else return {ok:false,error:'unexpected '+name};
   return {ok:true,value};
@@ -30,11 +32,12 @@ app.whenReady().then(async()=>{
  const window=new BrowserWindow({show:false,width:1250,height:750,webPreferences:{preload:path.resolve('app/preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
  const errors=[];window.webContents.on('console-message',event=>{if(event.level==='error')errors.push(event.message);});
  await window.loadFile(path.resolve('app/ui/index.html'));
- const run=code=>window.webContents.executeJavaScript(code);
+ const run=async code=>{try{return await window.webContents.executeJavaScript(code);}catch(e){throw new Error('RUN FAILED: '+code+' :: '+e.message);}};
  const wait=async code=>{for(let n=0;n<100;n++){if(await run(code))return;await new Promise(r=>setTimeout(r,30));}throw Error('UI wait failed: '+code);};
  await wait("Boolean(document.querySelector('[data-page=todo].active'))");await run("document.querySelector('[data-page=daily]').click()");await wait("Boolean(document.querySelector('[data-open-batch]'))");
  await run("document.querySelector('[data-page=batch]').click()");
  await wait("Boolean(document.querySelector('#localTab'))");
+ await run("document.querySelector('#localTab').click()");
  assert.equal(await run("document.querySelector('#read').disabled"),true);
  await wait("Boolean(document.querySelector('.week-file'))");
  await run("document.querySelector('.week-file').click()");
@@ -52,20 +55,20 @@ app.whenReady().then(async()=>{
  await wait("document.querySelector('[data-field=hours]').classList.contains('missing')");
  assert.equal(await run("document.querySelector('[data-field=hours]').classList.contains('invalid')"),false);
  assert.equal(await run("getComputedStyle(document.querySelector('[data-field=hours]')).backgroundColor"),'rgb(255, 248, 236)');
- await run("var h=document.querySelector('[data-field=hours]');h.value='1.3';h.dispatchEvent(new Event('change'));");
- await wait("document.querySelector('[data-field=hours]').nextElementSibling?.textContent.includes('0.5h倍数')");
+ await run("var h=document.querySelector('[data-field=hours]');h.value='0.3';h.dispatchEvent(new Event('change'));");
+ await wait("document.querySelector('[data-field=hours]').nextElementSibling?.textContent.includes('0.25的倍数')");
  assert.equal(await run("document.querySelector('[data-field=hours]').classList.contains('invalid')"),true);
  assert.equal(await run("document.querySelector('[data-field=hours]').classList.contains('missing')"),false);
  assert.equal(await run("getComputedStyle(document.querySelector('[data-field=hours]')).borderTopColor"),'rgb(198, 120, 102)');
  assert.equal(await run("getComputedStyle(document.querySelector('[data-field=hours]')).backgroundColor"),'rgb(255, 255, 255)');
- assert.match(await run("document.querySelector('[data-field=hours]').nextElementSibling.textContent"),/0.5h倍数/);
+ assert.match(await run("document.querySelector('[data-field=hours]').nextElementSibling.textContent"),/0\.25的倍数/);
  await run("document.querySelector('#nextReview').click()");
  assert.equal(await run("document.querySelector('#submit').disabled"),true);
  await run("document.querySelector('#editAgain').click();var h=document.querySelector('[data-field=hours]');h.value='2';h.dispatchEvent(new Event('change'));");
  await wait("!document.querySelector('[data-field=hours]').classList.contains('missing')");
  await run("var type=document.querySelector('[data-field=type]');type.value='';type.dispatchEvent(new Event('change'));");
  await wait("document.querySelector('[data-field=type]').classList.contains('missing')");
- assert.equal(await run("document.querySelector('[data-task]').textContent"),'选择工时类型');
+ assert.equal(await run("document.querySelector('[data-field=task]').value"),'');
  await run("var type=document.querySelector('[data-field=type]');type.value='需求分析';type.dispatchEvent(new Event('change'));");
  await wait("!document.querySelector('[data-field=type]').classList.contains('missing')");
  await run("const t=document.querySelector('[data-field=title]');t.value='';t.dispatchEvent(new Event('change'));");
@@ -88,6 +91,14 @@ app.whenReady().then(async()=>{
  await wait("!document.querySelector('#confirmPanel').hidden");
  assert.equal(commands.filter(c=>c.name==='parseImport').at(-1).payload.content,'手动内容');
  assert.equal(commands.some(c=>['listNotes','readNote','parseNote','suggest'].includes(c.name)),false);
+ assert.equal(await run("document.querySelector('[data-field=task]').value"),'需求调研及分析','默认预填子任务名称');
+ await run("var taskField=document.querySelector('[data-field=task]');taskField.value='自定义子任务';taskField.dispatchEvent(new Event('change'))");
+ for(let n=0;n<60&&!state.drafts.some(row=>row.task==='自定义子任务'&&row.taskSource==='manual');n++)await new Promise(resolve=>setTimeout(resolve,50));
+ assert.ok(state.drafts.some(row=>row.task==='自定义子任务'&&row.taskSource==='manual'),'手动任务名应写入草稿');
+ await run("var typeField=document.querySelector('[data-field=type]');typeField.value='项目管理';typeField.dispatchEvent(new Event('change'))");
+ await new Promise(resolve=>setTimeout(resolve,120));
+ assert.equal(await run("document.querySelector('[data-field=task]').value"),'自定义子任务','切换类型应保留手动任务名');
+ await run("typeField.value='需求分析';typeField.dispatchEvent(new Event('change'))");
  registered=true;
  await run("document.querySelector('#back').click();document.querySelector('#read').click()");
  await wait("!document.querySelector('#readError').hidden");
@@ -163,6 +174,40 @@ app.whenReady().then(async()=>{
   if(outcome==='success')assert.equal(await run("document.querySelector('#confirmPanel').hidden"),false);
   else {assert.deepEqual(state.drafts,existingDrafts);assert.equal(await run("document.querySelector('#choosePanel').hidden"),false);assert.match(await run("document.querySelector('#readError').textContent"),/超时/);assert.equal(await run("document.querySelector('#read').disabled"),false);}
  }
+ // 上传失败并返回填报后，按钮应回到“确认提交”，再次确认生成新批次
+ await run("document.querySelector('[data-page=batch]').click()");
+ await wait("Boolean(document.querySelector('#step1'))");
+ await run("document.querySelector('#step1').click();document.querySelector('#localTab').click()");
+ await wait("Boolean(document.querySelector('.week-file'))");
+ await run("document.querySelector('.week-file').click()");
+ await wait("document.querySelector('#previewBody').textContent.includes('花2小时')");
+ parseFailure=false;registered=false;
+ await run("document.querySelector('#read').click()");
+ await wait("!document.querySelector('#confirmPanel').hidden");
+ await wait("Boolean(document.querySelector('[data-field=title]'))");
+ const titleResult=await run("(()=>{try{const t=document.querySelector('[data-field=title]');t.value='失败重提';t.dispatchEvent(new Event('change'));return 'ok'}catch(e){return e.name+': '+e.message}})()");
+ assert.equal(titleResult,'ok','编辑标题:'+titleResult);
+ failNextBatch=true;
+ await run("document.querySelector('#nextReview').click();document.querySelector('#submit').click()");
+ await wait("document.querySelector('#submissionView').open");
+ assert.match(await run("document.querySelector('#submissionView').textContent"),/失败/,'模拟失败结果');
+ await run("document.querySelector('[data-return]').click()");
+ await wait("!document.querySelector('#confirmPanel').hidden");
+ assert.equal(await run("document.querySelector('#step2').classList.contains('active')"),true,'失败应回到第 2 步');
+ assert.ok(await run("document.querySelectorAll('#editRows tr.returned-failed').length>0"),'失败行应高亮');
+ assert.equal(await run("document.activeElement&&document.activeElement.dataset.field"),'title','焦点应落在第一条失败行');
+ assert.equal(await run("document.querySelector('#submit').textContent"),'确认提交','返回填报后应恢复为确认提交');
+ const submitsBefore=commands.filter(c=>c.name==='startSubmission').length;
+ await run("document.querySelector('#nextReview').click();document.querySelector('#submit').click()");
+ await wait("document.querySelector('#submissionView').open");
+ assert.ok(commands.filter(c=>c.name==='startSubmission').length>submitsBefore,'再次确认应发起新批次');
+ assert.equal(commands.filter(c=>c.name==='startSubmission').at(-1).payload.records[0].title,'失败重提');
+ // 全部成功时点“返回填报”回到第 1 步
+ await run("document.querySelector('#submissionView [data-return]').click()");
+ await wait("document.querySelector('#step1')&&document.querySelector('#step1').classList.contains('active')");
+ assert.equal(await run("document.querySelector('#confirmPanel').hidden"),true,'成功后应回到首页');
+ assert.equal(await run("document.querySelector('#choosePanel').hidden"),false);
+
  assert.equal(errors.length,0,errors.join('\n'));
  console.log('BATCH_UI_PASS');window.destroy();app.quit();
 }).catch(error=>{console.error(error);app.exit(1);});

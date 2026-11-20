@@ -1,5 +1,6 @@
 import {PersonalTodoService,todoCommands} from './todos.js';
-import {BatchImportService} from './batch-import.js';
+import {BatchImportService,todoEntryRecordId} from './batch-import.js';
+import {refreshTodoDraft} from './todo-data.js';
 import { randomUUID } from 'node:crypto';
 
 // 桌面页面只调用这里列出的业务动作。凭据读取和远端请求留在主进程。
@@ -29,12 +30,97 @@ export class WorkbenchService {
     return copy;
   }
   async submitter(config) {
-    if (!this.submission) this.submission = this.createSubmission(await this.client(config));
+    if (!this.submission) this.submission = this.createSubmission(await this.client(config),{
+      onItemSettled:item=>this.settleTodo(item),
+      onItemRemoved:record=>this.releaseTodo(record),
+      loadTodoEntries:()=>this.todoEntries()
+    });
     return this.submission;
   }
+  todoStore() {
+    this.personalTodos ||= new PersonalTodoService({store:this.store,today:this.today,id:this.todoId,now:this.todoNow});
+    return this.personalTodos;
+  }
+  /** 提交器只读取按笔索引的待办来源，不负责保存个人待办。 */
+  async todoEntries() {
+    const {state}=await this.todoStore().call('todoLoad');
+    return new Map(state.todos.flatMap(todo=>(todo.workLogs||[]).map(entry=>[entry.id,{...entry,todoId:todo.id}])));
+  }
+  /** 提交成功的工时回写到对应的一笔，页面据此显示“已登记”。 */
+  async settleTodo(item) {
+    if(!item?.todoId || !item.todoEntryId) return null;
+    return this.todoStore().markSubmitted(item.todoId,item.todoEntryId,{worklogId:item.worklogId,recordId:item.id,targetKey:item.targetKey,day:item.day});
+  }
+  async releaseTodo(record) {
+    if(!record?.todoId || !record.todoEntryId) return null;
+    return this.todoStore().markRecorded(record.todoId,record.todoEntryId);
+  }
+  /** 刷新待办来源时清理已删除待办/工时对应的未登记带入草稿。 */
+  async syncTodoDrafts() {
+    const {state}=await this.todoStore().call('todoLoad');
+    const todoIds=new Set(state.todos.map(todo=>todo.id));
+    const entryIds=new Set(state.todos.flatMap(todo=>(todo.workLogs||[]).map(entry=>entry.id)));
+    let config,scope;
+    try { config=await this.store.loadConfig(); scope=await this.scope(config); }
+    catch { return {removed:[]}; }
+    const removed=[];
+    await this.store.update(scope,current=>{
+      current.drafts=current.drafts.filter(draft=>{
+        const fromTodo=draft.sourceKind==='todo'||String(draft.importSourceId||'').startsWith('todo:')||Boolean(draft.todoId||draft.todoEntryId);
+        if(!fromTodo)return true;
+        const todoGone=Boolean(draft.todoId)&&!todoIds.has(draft.todoId);
+        const entryGone=Boolean(draft.todoEntryId)&&!entryIds.has(draft.todoEntryId);
+        if(!todoGone&&!entryGone)return true;
+        removed.push(draft.id);return false;
+      });
+    });
+    return {removed};
+  }
+  /** 修改/删除待办工时时同步已带入未提交的草稿；已登记的删除先走远端。 */
+  async changeWorkLog(command,data) {
+    const todos=this.todoStore();
+    const {state}=await todos.call('todoLoad');
+    const todo=state.todos.find(row=>row.id===data.todoId);
+    const entry=todo?.workLogs?.find(row=>row.id===data.entryId);
+    if(!todo||!entry) throw Object.assign(new Error('工时记录不存在，请重新打开后重试'),{code:'TODO_VALIDATION',field:'entryId'});
+    const recordId=entry.recordId||todoEntryRecordId(entry.id);
+    if(command==='todoDeleteWorkLog'&&entry.state==='submitted'){
+      if(!entry.recordId) throw new Error('找不到对应的填报记录，请先到填报记录中核对');
+      const submission=await this.submitter(await this.store.loadConfig());
+      await submission.deleteRecord(entry.recordId);
+      return {state:await todos.deleteWorkLog(data.todoId,data.entryId,{force:true})};
+    }
+    if(command==='todoUpdateWorkLog'){
+      const result=await todos.call(command,data);
+      const updated=result.state.todos.find(row=>row.id===data.todoId).workLogs.find(row=>row.id===data.entryId);
+      await this.syncDraft(recordId,updated);
+      return result;
+    }
+    const config=await this.store.loadConfig(),scope=await this.scope(config);
+    const stateForScope=await this.store.load(scope);
+    if(stateForScope.batches.some(batch=>!batch.returnedToDrafts && batch.items.some(item=>item.todoEntryId===entry.id && ['waiting','creating','submitting','retrying','uncertain','success'].includes(item.status)))){
+      throw new Error('这笔工时正在提交或结果待核对，请先到填报记录中核对。');
+    }
+    const result=await todos.call(command,data);
+    await this.syncDraft(recordId,null);
+    return result;
+  }
+  async syncDraft(recordId,patch) {
+    const config=await this.store.loadConfig();
+    const scope=await this.scope(config);
+    await this.store.update(scope,state=>{
+      const draft=state.drafts.find(row=>row.id===recordId);
+      if(!draft)return;
+      if(patch===null){state.drafts=state.drafts.filter(row=>row.id!==recordId);return;}
+      refreshTodoDraft(draft,patch);
+    });
+  }
   async call(command, data = {}) {
-    const commands = new Set([...todoCommands,'initialize','saveDraft','deleteDraft','deleteRecord','updateRecord','saveCommonTypes','searchIssues','getIssue','listTypes','searchMonthly','testJira','saveJira','listDocuments','readDocument','parseImport','chooseNotes','chooseExecutable','testAgent','saveAgent','suggest','bindMonth','startSubmission','getBatch','retry','returnToDrafts','openIssue']);
+    const commands = new Set([...todoCommands,'initialize','saveDraft','deleteDraft','deleteRecord','updateRecord','saveCommonTypes','searchIssues','getIssue','listTypes','searchMonthly','testJira','saveJira','listDocuments','readDocument','parseImport','importTodos','chooseNotes','chooseExecutable','testAgent','saveAgent','suggest','bindMonth','startSubmission','getBatch','retry','returnToDrafts','openIssue','syncTodoDrafts']);
     if (!commands.has(command)) throw new Error('不支持的工作台操作');
+    // 待办工时的改删需要同时触及当前工作区草稿或远端工时，因此走服务层而不是纯待办服务。
+    if(command==='todoUpdateWorkLog'||command==='todoDeleteWorkLog') return this.changeWorkLog(command,data);
+    if(command==='syncTodoDrafts') return this.syncTodoDrafts();
     // Personal data stays available before any JIRA configuration or account scope is consulted.
     if(todoCommands.includes(command)) {
       this.personalTodos ||= new PersonalTodoService({store:this.store,today:this.today,id:this.todoId,now:this.todoNow});
@@ -93,9 +179,14 @@ export class WorkbenchService {
       return directory;
     }
     if (command === 'chooseExecutable') return this.chooseExecutable();
-    if (['listDocuments','readDocument','parseImport'].includes(command)) {
+    if (['listDocuments','readDocument','parseImport','importTodos'].includes(command)) {
       this.batchImport ||= new BatchImportService({store:this.store,agent:this.agent,documentsFactory:this.documentsFactory});
       if(command==='parseImport')return this.batchImport.parse(data,config,scope);
+      if(command==='importTodos'){
+        const {state}=await this.todoStore().call('todoLoad');
+        // 类型一律留空由用户手选，不再调用模型补类型。
+        return this.batchImport.importTodos(data,state.todos,scope);
+      }
       if(!config.notesDirectory)throw new Error('请先选择文档所在文件夹');
       if(command==='listDocuments')return {files:await this.documentsFactory(config.notesDirectory).list()};
       return this.batchImport.read(data.file,config,scope);

@@ -1,8 +1,9 @@
 import {template} from './template.js';
 import {matchesQuery as matchTodo,compareTodos,dayKey,monthCells} from './query.js';
+import {HOUR_CHOICES,HOURS_ERROR,hoursValid} from '../../worklogs.js';
 
 // 每次挂载拥有独立的查看状态，释放后异步保存回包不会操作宿主其他页面。
-export function mountTodo(root,{call,onCount=()=>{}}){
+export function mountTodo(root,{call,onCount=()=>{},getTypes=()=>[],getProject=()=>''}){
 root.classList.add('todo-product');root.innerHTML=template;
 let disposed=false;const controller=new AbortController();
 const statuses = ['待处理', '进行中', '已完成'];
@@ -50,7 +51,7 @@ let composerExpanded = false;
 let groupOrderDraft = [];
 let datePanelAnchor = null;
 const commentDrafts = new Map();
-
+const localToday = () => new Date().toLocaleDateString('sv-SE');
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -86,6 +87,13 @@ function statusClass(status) {
   return status === '进行中' ? 'progress' : status === '已完成' ? 'done' : 'pending';
 }
 
+// 默认按创建时间倒序；保存过手动排序后以手动顺序为准。老分组没有 createdAt，保持原顺序排在后面。
+function orderedGroups() {
+  if (data.groupOrderManual) return data.groups;
+  const timed = data.groups.filter(group => group.createdAt).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const legacy = data.groups.filter(group => !group.createdAt);
+  return [...timed, ...legacy];
+}
 function groupName(id) {
   return data.groups.find(group => group.id === id)?.name || '未分组';
 }
@@ -161,7 +169,7 @@ function render() {
 function renderGroups(disabled) {
   const nav = $('#groupNav');
   nav.replaceChildren();
-  [{id: '', name: '全部'}, ...data.groups].forEach(group => {
+  [{id: '', name: '全部'}, ...orderedGroups()].forEach(group => {
     const row = element('div', 'group-item' + (currentGroup === group.id ? ' active' : ''));
     const button = element('button', 'group-button');
     button.type = 'button';
@@ -178,7 +186,7 @@ function renderGroups(disabled) {
 
 // 管理弹窗使用尚未保存的顺序；只有“保存顺序”成功才更新侧栏和事项分组选项。
 function openGroupManager() {
-  groupOrderDraft = data.groups.map(group => group.id);
+  groupOrderDraft = orderedGroups().map(group => group.id);
   setError($('#groupOrderError'), '');
   renderGroupManager();
   $('#groupManager').showModal();
@@ -186,7 +194,7 @@ function openGroupManager() {
 
 function renderGroupManager() {
   groupOrderDraft = groupOrderDraft.filter(id => data.groups.some(group => group.id === id));
-  data.groups.forEach(group => { if (!groupOrderDraft.includes(group.id)) groupOrderDraft.push(group.id); });
+  data.groups.forEach(group => { if (!groupOrderDraft.includes(group.id)) groupOrderDraft.unshift(group.id); });
   const list = $('#managedGroupList');
   list.replaceChildren();
   if (!groupOrderDraft.length) list.append(element('p', 'manager-empty', '还没有自定义分组。'));
@@ -418,11 +426,16 @@ function renderContent() {
     mark.addEventListener('keydown', event => { if (event.key === ' ' || event.key === 'Enter') event.stopPropagation(); });
     mark.addEventListener('change', async () => {
       const desired=mark.checked ? '已完成' : '待处理';mark.checked=todo.status==='已完成';
+      // 完成走工时对话框；取消或失败时勾选保持原样。
+      if(desired==='已完成'){openWorklogDialog(todo,{mode:'complete'});return;}
       await changeStatus(todo.id,desired,mark);
       mark.checked = data.todos.find(item => item.id === todo.id).status === '已完成';
     });
     const content = element('div'); content.append(element('span', 'row-title', todo.title));
     const subtitle = element('div', 'row-subtitle'); subtitle.append(element('span', '', groupName(todo.groupId)));
+    const logs = todo.workLogs || [];
+    const totalHours = logs.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
+    if (totalHours) subtitle.append(element('span', 'worklog-tag total', '总工时 ' + totalHours + ' h'));
     if (todo.comments.length) { const count = element('span', 'comment-count'); count.append(icon('comment'), document.createTextNode(todo.comments.length)); subtitle.append(count); }
     content.append(subtitle); title.append(mark, content); titleCell.append(title);
     const status = element('td'); status.append(element('span', 'status-badge ' + statusClass(todo.status), todo.status));
@@ -552,7 +565,10 @@ function renderDetail() {
   const fields=element('div','detail-fields');
   const statusField=element('div','detail-field'); const statusLabel=element('label','','状态'); statusLabel.htmlFor='detailStatus';
   const status=element('select'); status.id='detailStatus'; statuses.forEach(value=>{const option=element('option','',value); status.append(option);}); status.value=todo.status;
-  status.addEventListener('change',()=>changeStatus(todo.id,status.value,status)); statusField.append(statusLabel,status); enhanceSelect(status);
+  status.addEventListener('change',()=>{
+    if(status.value==='已完成'){status.value=todo.status;openWorklogDialog(todo,{mode:'complete'});return;}
+    changeStatus(todo.id,status.value,status);
+  }); statusField.append(statusLabel,status); enhanceSelect(status);
   const groupField=element('div','detail-field'); const groupLabel=element('label','','分组'); groupLabel.htmlFor='detailGroup';
   const group=element('select'); group.id='detailGroup'; populateGroups(group,todo.groupId); group.addEventListener('change',()=>moveGroup(todo.id,group)); groupField.append(groupLabel,group); enhanceSelect(group);
   const due=element('div','detail-field'); due.append(element('span','','截止'),element('span','field-value',todo.dueDate?dateLabel(todo.dueDate):'未设置'));
@@ -564,14 +580,31 @@ function renderDetail() {
   const comments=element('section','comments-section'); const commentTitle=element('div','comments-title'); commentTitle.append(element('h3','','评论'),element('span','',todo.comments.length)); comments.append(commentTitle);
   if (!todo.comments.length) comments.append(element('p','comments-empty','还没有评论，记下第一条进展吧。'));
   todo.comments.slice().sort((a,b)=>new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime()).forEach(comment=>comments.append(renderComment(todo,comment)));
-  scroll.append(heading,description,comments);
+  const worklogSection=renderWorkLogs(todo);
+  scroll.append(heading,description,worklogSection,comments);
   panel.append(scroll);
   if (composerExpanded) panel.append(renderComposer(todo));
   const bar = element('footer', 'detail-action-bar');
   const complete = element('button', todo.status === '已完成' ? '' : 'primary');
   complete.type = 'button';
   complete.append(icon('check'), document.createTextNode(todo.status === '已完成' ? '重新开始' : '完成待办'));
-  complete.addEventListener('click', () => changeStatus(todo.id, todo.status === '已完成' ? '进行中' : '已完成'));
+  complete.addEventListener('click', () => {
+    if(todo.status==='已完成'){
+      if(todo.workLogs?.some(entry=>entry.state==='submitted')){
+        const dialog=element('dialog','confirm-dialog');
+        dialog.setAttribute('aria-label','重新开始待办');
+        const footer=element('div','dialog-footer');
+        const cancel=element('button','','取消'),confirm=element('button','primary','重新开始');
+        footer.append(cancel,confirm);
+        dialog.append(element('p','confirm-body','只改变待办状态，不会删除已登记的 JIRA 工时。'),footer);
+        dialog.addEventListener('close',()=>dialog.remove());
+        cancel.onclick=()=>dialog.close();confirm.onclick=()=>{dialog.close();changeStatus(todo.id,'进行中');};
+        root.append(dialog);dialog.showModal();cancel.focus();
+      }else changeStatus(todo.id,'进行中');
+      return;
+    }
+    openWorklogDialog(todo,{mode:'complete'});
+  });
   const edit = element('button'); edit.type = 'button'; edit.append(icon('edit'), document.createTextNode('编辑'));
   edit.addEventListener('click', () => openEditor(todo.id));
   const comment = element('button', 'comment-action'); comment.type = 'button';
@@ -580,6 +613,141 @@ function renderDetail() {
   bar.append(complete, edit, comment); panel.append(bar);
 }
 
+// 完成与补填共用同一个对话框；只有保存成功才写状态，取消不改动任何数据。
+function openWorklogDialog(todo,{mode='add',entry=null}={}) {
+  const editing=Boolean(entry);
+  const dialog=element('dialog','worklog-dialog');
+  dialog.setAttribute('aria-labelledby','worklogDialogTitle');
+  const header=element('div','dialog-header');
+  const heading=element('div');
+  const title=element('h2',null,mode==='complete'?'完成待办':editing?'修改工时':'记录工时');
+  title.id='worklogDialogTitle';
+  heading.append(title,element('p',null,mode==='complete'?'顺手记一笔工时；也可以稍后到详情里补。':editing?'修改这一笔的日期或工时。':'记录一笔实际投入的工时，可记录多笔。'));
+  const close=element('button','worklog-close','×');
+  close.type='button';close.setAttribute('aria-label','关闭');
+  header.append(heading,close);
+
+  const form=element('form','worklog-form');form.noValidate=true;
+  const body=element('div','worklog-body');
+  body.append(element('p','worklog-target',todo.title));
+
+  const hoursInput=element('input');
+  hoursInput.type='number';hoursInput.min='0.25';hoursInput.step='0.25';hoursInput.id='worklogHours';
+  hoursInput.value=entry?.hours??'';hoursInput.placeholder='0.25';
+  const chips=element('div','worklog-chips');
+  const syncChips=()=>chips.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.hours)===Number(hoursInput.value))));
+  for(const value of HOUR_CHOICES){
+    const chip=element('button','worklog-chip',value+' h');chip.type='button';chip.dataset.hours=String(value);
+    chip.addEventListener('click',()=>{hoursInput.value=String(value);syncChips();});
+    chips.append(chip);
+  }
+  hoursInput.addEventListener('input',syncChips);syncChips();
+  const hoursField=element('div','worklog-field');
+  hoursField.append(element('span',null,'工时'),chips,hoursInput);
+
+  const dayInput=element('input');dayInput.type='date';dayInput.id='worklogDay';
+  dayInput.value=entry?.day||localToday();
+  const dayField=element('div','worklog-field');
+  dayField.append(element('span',null,'工作日期'),dayInput);
+
+  const row=element('div','worklog-row');
+  row.append(hoursField,dayField);
+  body.append(row);
+  const error=element('p','field-error');error.setAttribute('role','alert');error.hidden=true;
+  body.append(error);
+
+  const footer=element('div','dialog-footer');
+  const finish=async(command,payload,button)=>{
+    setError(error,'');
+    if(!await send(command,payload,error,button))return false;
+    dialog.close();dialog.remove();render();
+    return true;
+  };
+  const cancel=element('button',null,'取消');cancel.type='button';
+  cancel.addEventListener('click',()=>{dialog.close();dialog.remove();render();});
+  const skip=element('button',null,'暂不填写，仅完成');skip.type='button';
+  if(mode==='complete')skip.addEventListener('click',async()=>{
+    if(await finish('todoComplete',{id:todo.id},skip))showToast('已标记完成，工时稍后可补');
+  });
+  const save=element('button','primary',mode==='complete'?'保存并完成':editing?'保存修改':'保存');save.type='submit';
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const workLog={hours:hoursInput.value,day:dayInput.value};
+    if(workLog.hours===''||workLog.hours===null){setError(error,'请选择或填写工时');hoursInput.focus();return;}
+    if(!workLog.day){setError(error,'请选择工作日期');dayInput.focus();return;}
+    const command=mode==='complete'?'todoComplete':editing?'todoUpdateWorkLog':'todoAddWorkLog';
+    const payload=mode==='complete'?{id:todo.id,workLog}:editing?{todoId:todo.id,entryId:entry.id,workLog}:{todoId:todo.id,workLog};
+    if(!await finish(command,payload,save))return;
+    showToast(mode==='complete'?'已完成并记录 '+workLog.hours+' h':editing?'工时已更新':'已记录 '+workLog.hours+' h');
+  });
+  if(mode==='complete')footer.append(cancel,skip,save);else footer.append(cancel,save);
+  form.append(body,footer);
+  dialog.append(header,form);
+  dialog.addEventListener('cancel',event=>{event.preventDefault();dialog.close();dialog.remove();render();});
+  close.addEventListener('click',()=>{dialog.close();dialog.remove();render();});
+  root.append(dialog);
+  dialog.showModal();
+  hoursInput.focus();
+}
+
+function renderWorkLogs(todo) {
+  const logs=todo.workLogs||[];
+  const section=element('section','worklog-section');
+  const head=element('div','worklog-heading');
+  head.append(element('h3','','工时记录'));
+  if(logs.length)head.append(element('span','worklog-count',logs.length+' 笔'));
+  const add=element('button','text-action worklog-add','＋ 记录工时');
+  add.type='button';
+  add.addEventListener('click',()=>openWorklogDialog(todo,{mode:'add'}));
+  head.append(add);section.append(head);
+  if(!logs.length){section.append(element('p','worklog-empty','还没有工时记录，点击右上角「记录工时」添加第一笔。'));return section;}
+  const list=element('ul','worklog-list');
+  for(const entry of logs)list.append(renderWorkLogRow(todo,entry));
+  section.append(list);
+  section.append(element('p','worklog-total','合计 '+logs.reduce((sum,row)=>sum+Number(row.hours||0),0)+' h'));
+  return section;
+}
+function renderWorkLogRow(todo,entry) {
+  const row=element('li','worklog-item'+(entry.state==='submitted'?' submitted':''));row.dataset.entryId=entry.id;
+  row.append(element('span','worklog-day',dateLabel(entry.day)));
+  row.append(element('span','worklog-hours',entry.hours+' h'));
+  const submitted=entry.state==='submitted';
+  row.append(element('span','worklog-state '+(submitted?'done':''),submitted?'已登记':'未登记'));
+  const actions=element('span','worklog-actions');
+  if(!submitted){
+    const edit=element('button','text-action','修改');edit.type='button';
+    edit.addEventListener('click',()=>openWorklogDialog(todo,{mode:'edit',entry}));
+    actions.append(edit);
+  }
+  const remove=element('button','text-action danger','删除');remove.type='button';
+  remove.addEventListener('click',()=>askDeleteWorkLog(todo,entry));
+  actions.append(remove);row.append(actions);
+  return row;
+}
+function askDeleteWorkLog(todo,entry) {
+  const submitted=entry.state==='submitted';
+  const dialog=element('dialog','confirm-dialog');
+  dialog.setAttribute('aria-labelledby','deleteWorklogTitle');
+  const heading=element('div','confirm-heading');
+  const title=element('h2',null,'删除这条工时？');title.id='deleteWorklogTitle';heading.append(title);
+  const target=element('p','confirm-target',dateLabel(entry.day)+' · '+entry.hours+' h');
+  const body=element('p','confirm-body',submitted?'这条工时已在 JIRA 登记，将同时删除 JIRA 上的工时，无法恢复。':'删除后无法恢复。');
+  const error=element('div','inline-alert');error.hidden=true;error.setAttribute('role','alert');
+  const footer=element('div','dialog-footer');
+  const cancel=element('button',null,'取消');cancel.type='button';
+  const confirm=element('button','danger-button','删除');confirm.type='button';
+  footer.append(cancel,confirm);
+  dialog.append(heading,target,body,error,footer);
+  root.append(dialog);dialog.showModal();cancel.focus();
+  const close=()=>{dialog.close();dialog.remove();};
+  cancel.addEventListener('click',close);
+  dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
+  confirm.addEventListener('click',async()=>{
+    setError(error,'');
+    if(!await send('todoDeleteWorkLog',{todoId:todo.id,entryId:entry.id},error,confirm))return;
+    close();render();showToast(submitted?'工时记录及 JIRA 工时已删除':'工时记录已删除');
+  });
+}
 async function changeStatus(id,nextStatus,select=null) {
  const original=data.todos.find(todo=>todo.id===id).status;
  if(!await send('todoSetStatus',{id,status:nextStatus},null,select)){if(disposed)return;if(select)select.value=original;render();return;}
@@ -689,10 +857,25 @@ function renderComposer(todo) {
 function populateGroups(select, selected) {
   select.replaceChildren();
   const unset=element('option','','未分组');unset.value='';select.append(unset);
-  data.groups.forEach(group=>{const option=element('option','',group.name);option.value=group.id;select.append(option);});
+  orderedGroups().forEach(group=>{const option=element('option','',group.name);option.value=group.id;select.append(option);});
   select.value=selected;
 }
 
+function mountCreateExtras(){
+ if($('#createExtras'))return;
+ const extras=element('div','create-extras');
+ extras.id='createExtras';
+ extras.innerHTML='<div class="field"><label for="todoStatus">状态</label><select id="todoStatus"><option>待处理</option><option>进行中</option><option>已完成</option></select></div>'+
+  '<div class="field"><label for="todoHours">工时 <span class="optional">选填</span></label>'+
+  '<div class="worklog-chips create-hour-chips" role="group" aria-label="常用工时">'+HOUR_CHOICES.map(value=>'<button type="button" class="worklog-chip" data-create-hours="'+value+'">'+value+' h</button>').join('')+'</div>'+
+  '<div class="hours-inline"><input id="todoHours" type="number" min="0.25" step="0.25" inputmode="decimal" placeholder="也可直接输入"><span>h</span></div><p class="field-error" id="hoursError" role="alert" hidden></p></div>';
+ $('#newStatusNote').parentElement.insertBefore(extras,$('#newStatusNote'));
+ enhanceSelect($('#todoStatus'));
+ const hoursInput=$('#todoHours');
+ const syncChips=()=>extras.querySelectorAll('[data-create-hours]').forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.createHours)===Number(hoursInput.value))));
+ extras.querySelectorAll('[data-create-hours]').forEach(button=>button.addEventListener('click',()=>{hoursInput.value=button.dataset.createHours;syncChips();setError($('#hoursError'),'');}));
+ hoursInput.addEventListener('input',()=>{syncChips();setError($('#hoursError'),'');});
+}
 function openEditor(id=null) {
   if (!$('#filterDialog').hidden) closeSurface('filterDialog');
   closeQueryMenu(); closeDatePanel();
@@ -707,6 +890,13 @@ function openEditor(id=null) {
   $('#todoPriority').value=todo?.priority||'';
   populateGroups($('#todoGroup'),todo?todo.groupId:currentGroup);
   $('#newStatusNote').hidden=Boolean(todo);
+  if(todo){$('#createExtras')?.remove();}
+  else{
+   mountCreateExtras();
+   $('#todoStatus').value='待处理';$('#todoHours').value='';setError($('#hoursError'),'');
+   $('#newStatusNote').textContent='工时可留空，稍后在详情补充；填写后按今天记录一笔。';
+   syncSelectButton($('#todoStatus'));
+  }
   ['titleError','dateError','editorError'].forEach(name=>setError($('#'+name),''));
   $('#todoTitle').removeAttribute('aria-invalid');$('#todoDue').removeAttribute('aria-invalid');
   syncDateButton('todoDue');syncSelectButton($('#todoPriority'));syncSelectButton($('#todoGroup'));
@@ -720,7 +910,19 @@ async function saveTodo(event) {
   $('#todoTitle').setAttribute('aria-invalid',String(!title));due.setAttribute('aria-invalid',String(!due.validity.valid));
   if (!title||!due.validity.valid) {(title?due:$('#todoTitle')).focus();return;}
   const fields={title,description:$('#todoDescription').value,dueDate:due.value,priority:$('#todoPriority').value,groupId:$('#todoGroup').value};
-  const result=await send(editingId?'todoUpdate':'todoCreate',editingId?{id:editingId,changes:fields}:fields,$('#editorError'),$('#saveTodo'));
+  let payload=fields;
+  if(!editingId){
+   const raw=$('#todoHours').value;
+   let workLog=null;
+   if(raw!==''&&raw!=null){
+    const hours=Number(raw);
+    if(!hoursValid(hours)){setError($('#hoursError'),HOURS_ERROR);$('#todoHours').focus();return;}
+    workLog={hours,day:localToday()};
+   }
+   setError($('#hoursError'),'');
+   payload={...fields,status:$('#todoStatus').value,...(workLog?{workLog}:{})};
+  }
+  const result=await send(editingId?'todoUpdate':'todoCreate',editingId?{id:editingId,changes:fields}:payload,$('#editorError'),$('#saveTodo'));
   if(!result)return;
   const id=result.id;
   closeSurface('todoEditor');editingCommentId=null;

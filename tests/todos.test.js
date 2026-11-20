@@ -15,7 +15,7 @@ async function fixture(t){
 test('TODO independent empty load and title-only create survive reopening without config',async t=>{
  const {root,store,call}=await fixture(t);
  assert.deepEqual(await store.loadPersonalTodos(),{groups:[],todos:[]});assert.deepEqual(await readdir(root),[]);
- const created=await call('todoCreate',{title:'  first  ',id:'spoof',status:'已完成',createdAt:'spoof'});
+ const created=await call('todoCreate',{title:'  first  ',id:'spoof',createdAt:'spoof'});
  const todo=created.state.todos[0];assert.equal(todo.title,'first');assert.equal(todo.status,'待处理');assert.notEqual(todo.id,'spoof');assert.equal(todo.description,'');assert.equal(todo.groupId,'');
  assert.equal((await new Store(root).loadPersonalTodos()).todos[0].id,todo.id);
  assert.equal((await call('todoLoad')).today,'2026-11-11');
@@ -34,13 +34,26 @@ test('TODO full edit, statuses, comments and deletion retain the correct identit
  assert.deepEqual((await call('todoDelete',{id})).state.todos,[]);
 });
 test('TODO group reorder, rename and delete keep items and comments and timestamps',async t=>{
+ // 分组创建时间用于默认倒序。
  const {call,root}=await fixture(t);const a=(await call('todoGroupCreate',{name:'a'})).id,b=(await call('todoGroupCreate',{name:'b'})).id;
  const id=(await call('todoCreate',{title:'x',groupId:a})).id;await call('todoCommentCreate',{todoId:id,content:'keep'});
  const before=(await call('todoLoad')).state.todos[0];await call('todoGroupRename',{id:a,name:'renamed'});
- let result=await call('todoGroupReorder',{ids:[b,a]});assert.deepEqual(result.state.groups.map(g=>g.id),[b,a]);assert.deepEqual(result.state.todos[0],before);
+ let result=await call('todoGroupReorder',{ids:[b,a]});assert.deepEqual(result.state.groups.map(g=>g.id),[b,a]);assert.deepEqual(result.state.todos[0],before);assert.equal(result.state.groupOrderManual,true,'保存手动顺序后以手动排序为准');
  result=await call('todoGroupDelete',{id:a});assert.equal(result.state.todos[0].groupId,'');assert.equal(result.state.todos[0].comments[0].content,'keep');assert.equal(result.state.todos[0].title,'x');
  assert.deepEqual((await new Store(root).loadPersonalTodos()).groups.map(g=>g.id),[b]);
 });
+test('新分组默认置顶，且所有分组都可手动排序',async t=>{
+ const {call}=await fixture(t);
+ const a=(await call('todoGroupCreate',{name:'a'})).id;
+ const b=(await call('todoGroupCreate',{name:'b'})).id;
+ assert.deepEqual((await call('todoLoad')).state.groups.map(g=>g.id),[b,a],'新分组应排在最前');
+ await call('todoGroupReorder',{ids:[a,b]});
+ const c=(await call('todoGroupCreate',{name:'c'})).id;
+ assert.deepEqual((await call('todoLoad')).state.groups.map(g=>g.id),[c,a,b],'手动排序后新分组仍置顶');
+ await call('todoGroupReorder',{ids:[b,c,a]});
+ assert.deepEqual((await call('todoLoad')).state.groups.map(g=>g.id),[b,c,a],'所有分组都可手动排序');
+});
+
 test('TODO validation rejects invalid fields and foreign targets without writing',async t=>{
  const {call,file}=await fixture(t);const a=(await call('todoGroupCreate',{name:'a'})).id;const id=(await call('todoCreate',{title:'x'})).id;
  const comment=(await call('todoCommentCreate',{todoId:id,content:'keep'})).id;const other=(await call('todoCreate',{title:'other'})).id;
