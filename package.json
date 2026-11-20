@@ -16,6 +16,7 @@
     "electron": "45.2.1"
   },
   "dependencies": {
-    "cross-spawn": "7.0.6"
+    "cross-spawn": "7.0.6",
+    "mammoth": "1.13.0"
   }
 }

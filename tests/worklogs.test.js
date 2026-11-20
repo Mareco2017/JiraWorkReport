@@ -15,16 +15,18 @@ test('UI design has its own task while UI review keeps the design review task',(
  assert.equal(typeMapping['UI设计'],'UI设计');assert.equal(typeValues['UI设计'],'产品UI设计');
  assert.equal(typeMapping['ui评审'],'概要设计及评审');
  assert.equal(validateRecord({...valid,type:'UI设计',task:'UI设计'}).task,'UI设计');
- assert.throws(()=>validateRecord({...valid,type:'UI设计',task:'概要设计及评审'}),error=>error.field==='task');
+ assert.equal(validateRecord({...valid,type:'UI设计',task:'UI设计-支付环节'}).task,'UI设计-支付环节','子任务名称可自定义');
 });
-test('record entry rejects each invalid field while accepting half-hour steps',()=>{
+test('record entry rejects each invalid field while accepting quarter-hour steps',()=>{
   assert.equal(validateRecord(valid,{today:'2024-02-15'}).seconds,5400);
-  for(const hours of [undefined,'',0,0.25,1.3,'abc',Infinity])assert.throws(()=>validateRecord({...valid,hours},{today:'2024-02-15'}),error=>error.field==='hours');
+  for(const [hours,seconds] of [[0.25,900],[0.75,2700],[1.25,4500]])assert.equal(validateRecord({...valid,hours},{today:'2024-02-15'}).seconds,seconds);
+  for(const hours of [undefined,'',0,0.1,0.3,1.3,'abc',Infinity])assert.throws(()=>validateRecord({...valid,hours},{today:'2024-02-15'}),error=>error.field==='hours');
   for(const day of ['2024-02-30','2024-02-16','2024-13-01','bad'])assert.throws(()=>validateRecord({...valid,day},{today:'2024-02-15'}),error=>error.field==='day');
   assert.throws(()=>validateRecord({...valid,title:' '},{today:'2024-02-15'}),error=>error.field==='title');
   assert.throws(()=>validateRecord({...valid,issue:''},{today:'2024-02-15'}),error=>error.field==='issue');
   assert.throws(()=>validateRecord({...valid,type:'未知'},{today:'2024-02-15'}),error=>error.field==='type');
-  assert.throws(()=>validateRecord({...valid,task:'日常综合'},{today:'2024-02-15'}),error=>error.field==='task');
+  assert.equal(validateRecord({...valid,task:'日常综合-例会'},{today:'2024-02-15'}).task,'日常综合-例会','自定义任务名通过');
+  assert.throws(()=>validateRecord({...valid,task:'  '},{today:'2024-02-15'}),error=>error.field==='task');
   assert.equal(validateRecord({...valid,hours:3.5},{today:'2024-02-15'}).seconds,12600);
   assert.equal(validateRecord({...valid,type:'日常综合',task:'日常综合',issue:''},{today:'2024-02-15'}).task,'日常综合');
 });
@@ -46,9 +48,10 @@ test('project management and presales may use a requirement task or their origin
  ]) {
   assert.equal(validateRecord({...valid,type,task:requirementTask}).task,requirementTask);
   assert.equal(validateRecord({...valid,type,task:monthlyTask,issue:''}).task,monthlyTask);
-  // A returned monthly draft may already contain its resolved parent key; task preserves that original destination.
+  // 带月度父单号的草稿按类型判断，任务名仍保留原文。
   assert.equal(validateRecord({...valid,type,task:monthlyTask,issue:'DEMO-OLD-MONTH'}).task,monthlyTask);
-  assert.throws(()=>validateRecord({...valid,type,task:requirementTask,issue:''}),error=>error.field==='issue');
-  assert.throws(()=>validateRecord({...valid,type,task:'规格撰写及评审'}),error=>error.field==='task');
+  assert.equal(validateRecord({...valid,type,task:requirementTask,issue:''}).task,requirementTask,'无工单时按月度类型放行');
+  assert.equal(validateRecord({...valid,type,task:'规格撰写及评审'}).task,'规格撰写及评审','自定义任务名通过');
+  assert.throws(()=>validateRecord({...valid,type,task:'   '}),error=>error.field==='task');
  }
 });

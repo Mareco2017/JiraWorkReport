@@ -80,7 +80,7 @@ export class JiraClient {
     const condition=/^[A-Z][A-Z0-9_]*-\d+$/i.test(value)?'key = '+jqlText(value):'summary ~ '+jqlText(value);
     const term=value?' AND ('+condition+')':' AND summary ~ "工时"';
     // 已有月单可能是故事类型，新建月单则使用任务类型，查询时需要同时包含两者。
-    const issues=await this.search('project = '+jqlText(this.projectKey)+' AND issuetype in (10001,10002) AND assignee = '+jqlText(this.identity.name)+term+' ORDER BY created DESC','summary,issuetype,project,assignee,created,customfield_10301,customfield_13801,subtasks');
+    const issues=await this.search('project = '+jqlText(this.projectKey)+' AND issuetype in (10001,10002,10100) AND assignee = '+jqlText(this.identity.name)+term+' ORDER BY created DESC','summary,issuetype,project,assignee,created,customfield_10301,customfield_13801,subtasks');
     return issues.map(normalizeIssue);
   }
 
@@ -151,7 +151,7 @@ export class JiraClient {
 function jqlText(value) { return '"'+String(value).replace(/\\/g,'\\\\').replace(/"/g,'\\"')+'"'; }
 function normalizeIssue(value) {
   const f=value.fields||{};
-  return {id:String(value.id),key:value.key,title:f.summary||'',typeId:f.issuetype?.id,project:f.project?.key,assignee:f.assignee?.key||f.assignee?.name,assigneeName:f.assignee?.name,parent:f.parent?.key,subtasks:(f.subtasks||[]).map(item=>({id:String(item.id),key:item.key,title:item.fields?.summary||'',typeId:item.fields?.issuetype?.id})),created:f.created,tenant:f.customfield_10301,businessLine:f.customfield_13801};
+  return {id:String(value.id),key:value.key,title:f.summary||'',typeId:f.issuetype?.id,project:f.project?.key,assignee:f.assignee?.key||f.assignee?.name,assigneeName:f.assignee?.name,parent:f.parent?.key,subtasks:(f.subtasks||[]).map(item=>({id:String(item.id),key:item.key,title:item.fields?.summary||'',typeId:item.fields?.issuetype?.id,status:item.fields?.status?.name||'',statusCategory:item.fields?.status?.statusCategory?.key||''})),created:f.created,tenant:f.customfield_10301,businessLine:f.customfield_13801};
 }
 export function jiraError(code,message,uncertain=false) { return Object.assign(new Error(message),{code,uncertain}); }
 export function worklogDay(started,timeZone) {

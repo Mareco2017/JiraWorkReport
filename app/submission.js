@@ -1,11 +1,11 @@
 import {randomUUID} from 'node:crypto';
-import {validateRecord,validateWorkDetails,monthBounds,monthlyTasks,typeValues,isCompletedItem} from './worklogs.js';
+import {validateRecord,validateWorkDetails,monthBounds,isMonthlyType,typeValues,isCompletedItem} from './worklogs.js';
 import {jiraError,sameWorklog} from './jira.js';
 
 /** Both entry flows share this coordinator; UI closure never owns the lifetime of a batch. */
 export class SubmissionService {
-  constructor({store,jira,onUpdate=()=>{},today=()=>new Date().toLocaleDateString('sv-SE')}) {
-    Object.assign(this,{store,jira,onUpdate,today});
+  constructor({store,jira,onUpdate=()=>{},onItemSettled=async()=>{},onItemRemoved=async()=>{},today=()=>new Date().toLocaleDateString('sv-SE')}) {
+    Object.assign(this,{store,jira,onUpdate,onItemSettled,onItemRemoved,today});
     this.batches=new Map();
     this.jobs=new Map();
   }
@@ -63,7 +63,7 @@ export class SubmissionService {
     if(item.status==='uncertain') {
       const recovered=await this.reconcile(item);
       if(recovered) {
-        this.accept(item,recovered);await this.persist(batch);return structuredClone(batch);
+        this.accept(item,recovered);await this.persist(batch);await this.settle(item);return structuredClone(batch);
       }
       throw jiraError('UNCERTAIN','无法确定上次写入结果，请先在 JIRA 核对。');
     }
@@ -107,6 +107,8 @@ export class SubmissionService {
     });
     const batch=next.batches.find(row=>row.id===record.batchId);
     if(batch){this.batches.set(batch.id,batch);this.onUpdate(structuredClone(batch));}
+    // 待办侧回退为“已记录”，让这条工时可以重新带入；失败同样不影响删除结果。
+    if(record.todoId){try{await this.onItemRemoved({...record});}catch{}}
     return {id,batch,remoteDeleted:Boolean(record.worklogId)};
   }
 
@@ -194,6 +196,15 @@ export class SubmissionService {
     }
     this.accept(item,result);
     await this.persist(batch);
+    // 回写待办的工时状态；失败不能影响已经成功的远端提交。
+    await this.settle(item);
+  }
+
+  /** 待办侧只是登记状态的展示，任何回写异常都必须吞掉。 */
+  async settle(item) {
+    if(!item?.todoId || !item.todoEntryId || item.status!=='success') return;
+    try { await this.onItemSettled({...item}); }
+    catch { /* 已完成的远端工时不受本地待办回写失败影响。 */ }
   }
 
   accept(item,worklog) {
@@ -209,11 +220,14 @@ export class SubmissionService {
   }
 
   async resolveTarget(batch,item) {
+    // 手填子任务优先：先解析子任务，再由它反推父工单，不新建任何子任务。
+    if(item.subtaskKey) return this.resolveChosenSubtask(batch,item);
     let parent;
-    if(monthlyTasks.includes(item.task)) parent=await this.monthlyParent(batch,item);
+    if(isMonthlyType(item.type,Boolean(item.issue))) parent=await this.monthlyParent(batch,item);
     else {
       parent=await this.jira.getIssue(item.issue);
-      if(parent.typeId!=='10001'||parent.project!==batch.scope.project) throw jiraError('TARGET','请选择本项目的需求故事。');
+      // 本站点的需求类工单有「新功能(10100)」「故事(10001)」，任务(10002)也允许挂子任务。
+      if(!['10001','10100','10002'].includes(String(parent.typeId))||parent.project!==batch.scope.project) throw jiraError('TARGET','该类型的工单不支持创建子任务！');
     }
     item.issue=parent.key;item.issueTitle=parent.title;
     let target=parent.subtasks.find(task=>task.title===item.task);
@@ -221,7 +235,7 @@ export class SubmissionService {
       item.status='creating';item.phase='creating';item.creationLabel='正在创建子任务「'+item.task+'」';await this.persist(batch);
       const meta=await this.jira.getCreateMeta('10003');
       const period=monthBounds(item.day);
-      const fields={project:{key:batch.scope.project},issuetype:{id:'10003'},parent:{key:parent.key},summary:item.task,assignee:{name:this.jira.identity.name},customfield_14600:period.start,duedate:period.end,timetracking:{originalEstimate:'0m',remainingEstimate:'0m'}};
+      const fields={project:{key:batch.scope.project},issuetype:{id:'10003'},parent:{key:parent.key},summary:item.task,assignee:{name:this.jira.identity.name},reporter:{name:this.jira.identity.name},customfield_14600:period.start,duedate:period.end,timetracking:{originalEstimate:'0m',remainingEstimate:'0m'}};
       requireFields(meta,fields);
       try { target=await this.jira.createIssue(fields); }
       catch(error) {
@@ -231,7 +245,30 @@ export class SubmissionService {
         if(!target) throw jiraError('UNCERTAIN','子任务创建结果待核对。',true);
       }
     }
-    item.targetId=target.id;item.targetKey=target.key;item.phase='ready';await this.persist(batch);
+    item.targetId=target.id;item.targetKey=target.key;item.targetTitle=target.title;item.phase='ready';await this.persist(batch);
+  }
+
+  /** 手填子任务：以子任务为准，反推父工单并校验类型，绝不创建。 */
+  async resolveChosenSubtask(batch,item) {
+    const target=await this.jira.getIssue(item.subtaskKey);
+    if(target.typeId!=='10003') throw jiraError('SUBTASK','该编号不是子任务，请核对后再填。');
+    if(!target.parent) throw jiraError('SUBTASK','该子任务缺少父工单，无法登记工时。');
+    const parent=await this.jira.getIssue(target.parent);
+    if(parent.project!==batch.scope.project) throw jiraError('SUBTASK','该子任务不在当前项目中。');
+    // 手填为准：只要子任务存在且属于当前项目就直接使用，不再限制父单类型与工时类型匹配。
+    item.issue=parent.key;item.issueTitle=parent.title;item.issueSource='subtask';
+    // 月度任务且父单确实是综合工时单时才绑定该月，避免把需求故事误绑定为月度工单。
+    if(isMonthlyType(item.type,Boolean(item.issue))&&parent.typeId==='10002'){
+      try { validateMonthly(parent,batch.scope,this.jira.identity);await this.bindMonth(batch,item.day,parent,'手选子任务'); }
+      catch { /* 仅跳过自动绑定，不影响本次工时写入所选子任务。 */ }
+    }
+    item.targetId=target.id;item.targetKey=target.key;item.targetTitle=target.title;item.phase='ready';
+    await this.persist(batch);
+  }
+
+  async bindMonth(batch,day,issue,source) {
+    const month=day.slice(0,7);
+    await this.store.update(batch.scope,current=>{current.bindings[month]={month,id:issue.id,key:issue.key,title:issue.title,source};});
   }
 
   async monthlyParent(batch,item) {
@@ -253,7 +290,7 @@ export class SubmissionService {
       if(!template?.tenant||!template.businessLine?.id) throw jiraError('MONTHLY_FIELDS','找不到本人上月的租户和业务线，请先在设置指定月度工单。');
       const allowed=meta.customfield_13801?.allowedValues;
       if(allowed&&!allowed.some(value=>String(value.id)===String(template.businessLine.id))) throw jiraError('MONTHLY_FIELDS','上月业务线已失效，请先配置月度工单。');
-      const fields={project:{key:batch.scope.project},issuetype:{id:'10002'},summary:Number(month.slice(0,4))+'年'+Number(month.slice(5))+'月产品综合工时管理',assignee:{name:this.jira.identity.name},customfield_10301:String(template.tenant),customfield_13801:{id:String(template.businessLine.id)}};
+      const fields={project:{key:batch.scope.project},issuetype:{id:'10002'},summary:Number(month.slice(0,4))+'年'+Number(month.slice(5))+'月产品综合工时管理',assignee:{name:this.jira.identity.name},reporter:{name:this.jira.identity.name},customfield_10301:String(template.tenant),customfield_13801:{id:String(template.businessLine.id)}};
       requireFields(meta,fields);
       item.status='creating';item.phase='creating';item.creationLabel='正在创建'+fields.summary;await this.persist(batch);
       try { issue=await this.jira.createIssue(fields); }
@@ -266,7 +303,7 @@ export class SubmissionService {
     }
     validateMonthly(issue,batch.scope,this.jira.identity);
     // Persist the created parent before any child/worklog action, so a later failure cannot create it twice.
-    await this.store.update(batch.scope,current=>{current.bindings[month]={month,id:issue.id,key:issue.key,title:issue.title,source};});
+    await this.bindMonth(batch,item.day,issue,source);
     return issue;
   }
 

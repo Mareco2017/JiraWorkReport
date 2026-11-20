@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {access} from 'node:fs/promises';
 import {Store} from './store.js';
 import {Secrets} from './secrets.js';
-import {WeekNotes} from './week-notes.js';
+import {DocumentDirectory} from './documents.js';
 import {JiraClient} from './jira.js';
 import {SubmissionService} from './submission.js';
 import {AgentService} from './agent.js';
@@ -32,8 +32,8 @@ const service=new WorkbenchService({
   // 真实事项只交给本机配置中已核实的模型来源；公开示例不信任任何网关。
   trustedModelOrigins:siteDefaults.trustedModelOrigins,
   createJira: config=>new JiraClient(config),
-  createSubmission: jira=>new SubmissionService({store,jira,onUpdate:batch=>window?.webContents.send('workbench:update',batch)}),
-  notesFactory: directory=>new WeekNotes({directory}),
+  createSubmission: (jira,hooks)=>new SubmissionService({store,jira,onUpdate:batch=>window?.webContents.send('workbench:update',batch),...hooks}),
+  documentsFactory: directory=>new DocumentDirectory({directory}),
   chooseDirectory: async()=>{
     const selected=await dialog.showOpenDialog(window,{properties:['openDirectory']});
     return selected.canceled ? null : selected.filePaths[0];
