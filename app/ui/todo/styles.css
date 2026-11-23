@@ -474,7 +474,7 @@
 /* 工时账本：标题/计数/操作同一行，行内日期-工时-状态-操作四列对齐。 */
 .todo-product .worklog-section{margin-top:24px;padding-top:16px;border-top:1px solid var(--exe-divider)}
 .todo-product .worklog-heading{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.todo-product .worklog-heading h3{font-size:16px;line-height:24px;font-weight:500;color:#333333;margin:0}
+.todo-product .worklog-heading h3{font-size:13px;font-weight:600;color:#43536a;margin:0}
 .todo-product .worklog-count{font-size:12px;line-height:20px;color:var(--exe-text-tertiary);font-variant-numeric:tabular-nums}
 .todo-product .worklog-heading .worklog-add{margin-left:auto;font-size:12px;line-height:20px;color:var(--exe-brand-click)}
 .todo-product .worklog-heading .worklog-add:hover{color:var(--exe-brand)}
@@ -548,8 +548,7 @@
   display:flex; align-items:center; gap:8px; margin-bottom:8px;
 }
 .todo-product .subtask-heading h3 {
-  font-size:16px; line-height:24px; font-weight:500;
-  color:#333333; margin:0;
+  font-size:13px; font-weight:600; color:#43536a; margin:0;
 }
 .todo-product .subtask-count { flex:none; }
 .todo-product .subtask-heading .subtask-add-trigger {
