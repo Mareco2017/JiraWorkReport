@@ -545,17 +545,17 @@
   margin:24px 23px 0; padding:16px 0 0; border-top:1px solid var(--exe-divider);
 }
 .todo-product .subtask-heading {
-  display:flex; align-items:center; justify-content:space-between;
-  gap:8px; margin-bottom:8px;
+  display:flex; align-items:center; gap:8px; margin-bottom:8px;
 }
 .todo-product .subtask-heading h3 {
   font-size:16px; line-height:24px; font-weight:500;
   color:#333333; margin:0;
 }
 .todo-product .subtask-count { flex:none; }
-.todo-product .subtask-heading-meta {
-  display:flex; align-items:center; gap:10px; margin-left:auto;
+.todo-product .subtask-heading .subtask-add-trigger {
+  margin-left:auto; font-size:12px; line-height:20px; color:var(--exe-brand-click);
 }
+.todo-product .subtask-heading .subtask-add-trigger:hover { color:var(--exe-brand); }
 .todo-product .subtask-list { list-style:none; margin:9px 0 0; padding:0; }
 .todo-product .subtask-item {
   display:flex; align-items:flex-start; gap:9px;
@@ -586,10 +586,6 @@
   border:1px solid var(--exe-brand-ring); border-radius:5px; font-size:13px;
 }
 .todo-product .subtask-edit button { height:32px; padding:0 9px; font-size:11px; }
-.todo-product .subtask-empty {
-  margin-top:9px; padding:4px 0 8px; font-size:12px; line-height:1.7;
-  color:var(--exe-text-tertiary);
-}
 
 .todo-product .completion-notice {
   display:flex; gap:9px; align-items:flex-start;

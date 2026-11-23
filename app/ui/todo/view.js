@@ -618,19 +618,17 @@ function renderSubtasks(todo) {
  heading.append(element('h3', '', '子任务'));
  const list = todo.subtasks || [];
  const progress = subtaskProgress(todo);
- const meta = element('div', 'subtask-heading-meta');
- if (progress) meta.append(element('span', 'status-badge subtask-count' + (progress.done === progress.total ? ' done' : ''), progress.text));
+ if (progress) heading.append(element('span', 'status-badge subtask-count' + (progress.done === progress.total ? ' done' : ''), progress.text));
  const addButton = element('button', 'text-action subtask-add-trigger', '＋ 添加子任务');
  addButton.type = 'button';
  addButton.addEventListener('click', () => openSubtaskDialog(todo));
- meta.append(addButton);
- heading.append(meta);
+ heading.append(addButton);
  section.append(heading);
 
  const error = element('p', 'field-error'); error.hidden = true; error.setAttribute('role', 'alert');
  section.append(error);
  if (!list.length) {
-  section.append(element('p', 'subtask-empty', '还没有子任务，点击右上角「添加」添加子任务。'));
+  section.append(element('p', 'worklog-empty subtask-empty', '还没有子任务，点击右上角「添加」添加子任务。'));
   return section;
  }
  const listNode = element('ul', 'subtask-list');
