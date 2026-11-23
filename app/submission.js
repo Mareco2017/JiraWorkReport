@@ -280,7 +280,9 @@ export class SubmissionService {
       item.status='creating';item.phase='creating';item.creationLabel='正在创建子任务「'+item.task+'」';await this.persist(batch);
       const meta=await this.jira.getCreateMeta('10003');
       const period=monthBounds(item.day);
-      const fields={project:{key:batch.scope.project},issuetype:{id:'10003'},parent:{key:parent.key},summary:item.task,assignee:{name:this.jira.identity.name},reporter:{name:this.jira.identity.name},customfield_14600:period.start,duedate:period.end,timetracking:{originalEstimate:'0m',remainingEstimate:'0m'}};
+      const fields={project:{key:batch.scope.project},issuetype:{id:'10003'},parent:{key:parent.key},summary:item.task,assignee:{name:this.jira.identity.name},customfield_14600:period.start,duedate:period.end,timetracking:{originalEstimate:'0m',remainingEstimate:'0m'}};
+      // Jira 会拒绝设置创建规则未开放的报告人字段，即使填的是当前账号。
+      if(meta.reporter?.operations?.includes('set')) fields.reporter={name:this.jira.identity.name};
       requireFields(meta,fields);
       try { target=await this.jira.createIssue(fields); }
       catch(error) {

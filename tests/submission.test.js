@@ -279,17 +279,45 @@ test('新功能/故事/任务三种父单都可创建子任务，其他类型提
  assert.equal(jira.posts.length,0);
 });
 
-test('新建子任务与新建月度工单都会带上报告人',async()=>{
- // 子任务创建
+for(const [rule,meta] of [['未开放报告人',{}],['报告人不可设置',{reporter:{operations:[]}}]]){
+ test(`Jira ${rule}时仍能创建子任务并登记一次工时`,async()=>{
+  const jira=api(),get=jira.getIssue,create=jira.createIssue;
+  jira.getIssue=async key=>key==='S-1'?{...await get(key),subtasks:[{key:'S-2',id:'102',title:'需求传达'}]}:await get(key);
+  jira.getCreateMeta=async()=>meta;
+  let attempts=0;
+  // 模拟现场的创建规则：即使其他字段有效，带上不可设置的报告人也会被拒绝。
+  jira.createIssue=async fields=>{
+   attempts++;
+   if(Object.hasOwn(fields,'reporter'))throw Object.assign(Error('JIRA 字段不合法，请返回填报修正。'),{code:'FIELDS'});
+   return create(fields);
+  };
+  const service=new SubmissionService({store:memoryStore(),jira});
+  const batch=await service.start([{...record('report-child',0.5),title:'需求分析'}]);
+  const {items:[item]}=await service.wait(batch.id);
+  assert.equal(item.status,'success',item.error);
+  assert.equal(attempts,1);
+  assert.equal(jira.created.length,1);
+  assert.deepEqual(jira.created[0].parent,{key:'S-1'});
+  assert.equal(jira.created[0].summary,'需求调研及分析');
+  assert.equal(jira.posts.length,1);
+  const [posted]=jira.posts;
+  assert.deepEqual([posted.targetKey,posted.title,posted.seconds,posted.type],['S-3','需求分析',1800,'需求分析']);
+  assert.equal(item.worklogId,'701');
+ });
+}
+
+test('Jira 允许设置报告人时，新建子任务传当前账号',async()=>{
  const jira=api(),get=jira.getIssue;
  jira.getIssue=async key=>({...await get(key),subtasks:[]});
+ jira.getCreateMeta=async()=>({reporter:{operations:['set']}});
  const service=new SubmissionService({store:memoryStore(),jira});
- let batch=await service.start([record('report-child')]);await service.wait(batch.id);
+ const batch=await service.start([record('report-child')]);await service.wait(batch.id);
  assert.equal(jira.created.length,1);
  assert.deepEqual(jira.created[0].reporter,{name:'alice'},'子任务需带 reporter');
  assert.equal((await service.getBatch(batch.id)).items[0].status,'success');
+});
 
- // 月度工单创建
+test('新建月度工单仍带上报告人',async()=>{
  const jira2=api();jira2.types.push({name:'日常综合',value:'日常综合'});
  const template={key:'M-1',id:'10',title:'2024年1月综合工时',created:'2024-01-01',typeId:'10002',project:'DEMO',assignee:'A',assigneeName:'alice',tenant:'888',businessLine:{id:'17008'},subtasks:[]};
  const monthParent={...template,key:'M-2',id:'20',title:'2024年2月产品综合工时管理',created:'2024-02-01'};
@@ -297,7 +325,7 @@ test('新建子任务与新建月度工单都会带上报告人',async()=>{
  jira2.createIssue=async fields=>{jira2.created.push(fields);return fields.issuetype.id==='10002'?monthParent:{key:'M-3',id:'30',title:fields.summary,typeId:'10003',project:'DEMO',parent:'M-2'};};
  jira2.getIssue=async key=>key==='M-2'?monthParent:{key:'M-3',id:'30',title:'日常综合',typeId:'10003',project:'DEMO',parent:'M-2'};
  const service2=new SubmissionService({store:memoryStore(),jira:jira2});
- batch=await service2.start([{...record('report-month'),issue:'',type:'日常综合',task:'日常综合'}]);await service2.wait(batch.id);
+ const batch=await service2.start([{...record('report-month'),issue:'',type:'日常综合',task:'日常综合'}]);await service2.wait(batch.id);
  const monthlyFields=jira2.created.find(fields=>fields.issuetype.id==='10002');
  assert.ok(monthlyFields,'应创建月度工单');
  assert.deepEqual(monthlyFields.reporter,{name:'alice'},'月工单需带 reporter');

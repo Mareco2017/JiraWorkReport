@@ -29,6 +29,7 @@
 
 ## 版本发布
 
+- [v0.2.1](https://github.com/Mareco2017/JiraWorkReport/releases/tag/v0.2.1)：修复自动创建子任务时传入不可设置的「报告人」导致的字段错误；提供 Apple 芯片 Mac、Intel Mac、Windows x64 的 ZIP 及 SHA-256 校验文件。
 - [v0.2.0](https://github.com/Mareco2017/JiraWorkReport/releases/tag/v0.2.0)：待办工时与批量填报整合，调整窗口、绿色主题、日期控件和表单提示；提供 Apple 芯片 Mac、Intel Mac、Windows x64 的 ZIP 及 SHA-256 校验文件。
 - [v0.1.0](https://github.com/Mareco2017/JiraWorkReport/releases/tag/v0.1.0)：首个公开版本，包含个人待办及日历。
 
