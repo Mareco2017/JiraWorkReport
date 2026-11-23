@@ -8,6 +8,19 @@ export function matchesQuery(todo, query, currentGroup = '') {
     && (!keyword || todo.title.toLocaleLowerCase().includes(keyword) || todo.description.toLocaleLowerCase().includes(keyword));
 }
 
+
+/** groups 不传时只返回 total；传 data.groups 才得到各自定义分组计数。排序和视图不参与。 */
+export function countTodosByGroup(todos, query, groups = []) {
+ const byGroup = new Map(groups.map(group => [group.id, 0]));
+ let total = 0;
+ for (const todo of todos) {
+  if (!matchesQuery(todo, query, '')) continue;
+  total += 1;
+  if (todo.groupId && byGroup.has(todo.groupId)) byGroup.set(todo.groupId, byGroup.get(todo.groupId) + 1);
+ }
+ return {total, byGroup};
+}
+
 // 未设置的日期/优先级固定后置，方向只影响已设置项；同值按创建时间倒序。
 export function compareTodos(a, b, sort) {
   const created = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

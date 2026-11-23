@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
-import {todoObject,todoText,todoChoice,todoFields,todoValidation,todoStatuses,todoWorkLogEntry,todoWorkLogPatch,workLogStates,WORKLOG_MAX} from './todo-data.js';
+import {todoObject,todoText,todoChoice,todoFields,todoValidation,todoStatuses,todoWorkLogEntry,todoWorkLogPatch,todoSubtaskTitle,todoSubtaskDone,workLogStates,WORKLOG_MAX} from './todo-data.js';
 
-export const todoCommands = ['todoLoad','todoCreate','todoUpdate','todoSetStatus','todoDelete','todoComplete','todoAddWorkLog','todoUpdateWorkLog','todoDeleteWorkLog','todoGroupCreate','todoGroupRename','todoGroupDelete','todoGroupReorder','todoCommentCreate','todoCommentUpdate','todoCommentDelete'];
+export const todoCommands = ['todoLoad','todoCreate','todoUpdate','todoSetStatus','todoDelete','todoComplete','todoAddWorkLog','todoUpdateWorkLog','todoDeleteWorkLog','todoSubtaskCreate','todoSubtaskUpdate','todoSubtaskSetDone','todoSubtaskDelete','todoGroupCreate','todoGroupRename','todoGroupDelete','todoGroupReorder','todoCommentCreate','todoCommentUpdate','todoCommentDelete'];
 
 // IPC入口只保留约定字段，ID、时间、状态初值和评论归属不会由页面覆盖。
 function parseCommand(command,payload) {
@@ -18,6 +18,10 @@ function parseCommand(command,payload) {
  if(command==='todoAddWorkLog')return {todoId:todoText(data.todoId,'todoId',{required:true}),workLog:todoWorkLogEntry(data.workLog)};
  if(command==='todoUpdateWorkLog')return {todoId:todoText(data.todoId,'todoId',{required:true}),entryId:todoText(data.entryId,'entryId',{required:true}),patch:todoWorkLogPatch(data.workLog)};
  if(command==='todoDeleteWorkLog')return {todoId:todoText(data.todoId,'todoId',{required:true}),entryId:todoText(data.entryId,'entryId',{required:true})};
+ if(command==='todoSubtaskCreate')return {todoId:todoText(data.todoId,'todoId',{required:true}),title:todoSubtaskTitle(data.title)};
+ if(command==='todoSubtaskUpdate')return {todoId:todoText(data.todoId,'todoId',{required:true}),id:todoText(data.id,'id',{required:true}),title:todoSubtaskTitle(data.title)};
+ if(command==='todoSubtaskSetDone')return {todoId:todoText(data.todoId,'todoId',{required:true}),id:todoText(data.id,'id',{required:true}),done:todoSubtaskDone(data.done)};
+ if(command==='todoSubtaskDelete')return {todoId:todoText(data.todoId,'todoId',{required:true}),id:todoText(data.id,'id',{required:true})};
  if(command==='todoGroupReorder'){
   if(!Array.isArray(data.ids))throw todoValidation('请提供分组顺序','ids');
   return {ids:data.ids.map(id=>todoText(id,'ids',{required:true}))};
@@ -56,7 +60,7 @@ export class PersonalTodoService {
     checkGroup(state,data.groupId);
     const {workLog,...fields}=data,time=stamp();
     resultId=this.id();
-    const todo={id:resultId,...fields,createdAt:time,updatedAt:time,comments:[]};
+    const todo={id:resultId,...fields,createdAt:time,updatedAt:time,comments:[],subtasks:[]};
     if(workLog){
      todo.workLogs=[{id:this.id(),...workLog,state:'recorded',createdAt:time,updatedAt:time}];
      todo.completedAt=time;
@@ -79,6 +83,18 @@ export class PersonalTodoService {
    }
    const todo=target(state.todos,data.todoId||data.id,data.todoId?'todoId':'id','待办');
    const logs=()=>{todo.workLogs??=[];return todo.workLogs;};
+   if(command.startsWith('todoSubtask')){
+    todo.subtasks??=[];const time=stamp();
+    if(command==='todoSubtaskCreate'){
+     resultId=this.id();todo.subtasks.push({id:resultId,title:data.title,done:false});
+    }else{
+     const subtask=target(todo.subtasks,data.id,'id','子任务');
+     if(command==='todoSubtaskUpdate'){subtask.title=data.title;resultId=subtask.id;}
+     else if(command==='todoSubtaskSetDone'){subtask.done=data.done;resultId=subtask.id;}
+     else{todo.subtasks=todo.subtasks.filter(row=>row.id!==subtask.id);resultId=undefined;}
+    }
+    todo.updatedAt=time;return;
+   }
    if(command==='todoDelete'){state.todos=state.todos.filter(row=>row.id!==todo.id);return;}
    if(command==='todoComplete'){
     todo.status='已完成';

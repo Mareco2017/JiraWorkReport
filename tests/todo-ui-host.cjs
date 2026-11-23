@@ -63,6 +63,36 @@ app.whenReady().then(async()=>{
   await wait("document.querySelector('#detailTitle')?.textContent==='真实保存与重开'");
   await run("document.querySelector('.comment-action').click();document.querySelector('#commentInput').value='真实评论';document.querySelector('#commentInput').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#commentForm').requestSubmit()");
   await wait("document.querySelector('.comment-text')?.textContent==='真实评论'");
+  assert.equal(await run("document.querySelector('.subtask-empty')?.textContent"),'还没有子任务，点击右上角「添加」添加子任务。');
+  // 子任务：新增、勾选、编辑、删除、完成提醒和列表进度。
+  let expectedSubtasks=0;
+  const addSubtask=async title=>{
+   expectedSubtasks+=1;
+   await run("document.querySelector('.subtask-add-trigger').click()");
+   await wait("Boolean(document.querySelector('#subtaskDialog[open]'))");
+   await run(`document.querySelector('#subtaskTitle').value=${JSON.stringify(title)};document.querySelector('#subtaskForm').requestSubmit()`);
+   await wait(`document.querySelectorAll('.subtask-item').length===${expectedSubtasks}`);
+  };
+  await addSubtask('整理验收范围');await addSubtask('汇总遗留问题');await addSubtask('同步周会记录');
+  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 0/3');
+  await run("document.querySelectorAll('.subtask-checkbox')[0].click()");
+  await wait("document.querySelector('.subtask-count').textContent==='已完成 1/3'");
+  assert.equal(await run("document.querySelector('.todo-table tbody tr .subtask-progress').textContent"),'已完成 1/3');
+  await run("document.querySelectorAll('.subtask-actions button')[2].click()");
+  await wait("Boolean(document.querySelector('.subtask-edit input'))");
+  await run("document.querySelector('.subtask-edit input').value='汇总遗留问题（更新）';document.querySelector('.subtask-edit button').click()");
+  await wait("document.querySelectorAll('.subtask-title')[1].textContent==='汇总遗留问题（更新）'");
+  await run("document.querySelectorAll('.subtask-item')[2].querySelector('.subtask-actions button.danger').click()");
+  await wait("Boolean(document.querySelector('#confirmDialog[open]'))");
+  await run("document.querySelector('#confirmDelete').click()");
+  await wait("document.querySelectorAll('.subtask-item').length===2");
+  await run("document.querySelector('.detail-action-bar button').click()");
+  await wait("Boolean(document.querySelector('.worklog-dialog[open]'))");
+  assert.match(await run("document.querySelector('.completion-notice').textContent"),/还有 1 个未完成子任务/);
+  await run("document.querySelector('.worklog-dialog .dialog-footer button').click()");
+  await wait("!document.querySelector('.worklog-dialog[open]')");
+  assert.equal(await run("document.querySelector('#detailStatus').value"),'待处理');
+  assert.equal(await run("document.querySelectorAll('.subtask-item').length"),2);
   await run("document.querySelector('.detail-action-bar button').click()");
   await wait("Boolean(document.querySelector('.worklog-dialog[open]'))");
   assert.equal(await run("document.querySelector('.worklog-dialog').getBoundingClientRect().width"),420);
@@ -82,6 +112,9 @@ app.whenReady().then(async()=>{
   if(process.argv[4])await fs.writeFile(path.join(directory,'worklog-dialog.png'),(await window.webContents.capturePage()).toPNG());
   await run("document.querySelector('.worklog-dialog button[type=submit]').click()");
   await wait("document.querySelector('#detailStatus').value==='已完成'");
+  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 1/2');
+  assert.equal(await run("document.querySelectorAll('.subtask-item').length"),2);
+  assert.equal(await run("document.querySelector('.todo-table tbody tr .subtask-progress').textContent"),'已完成 1/2');
   await wait("document.querySelector('.worklog-description')?.textContent==='整理筛选条件'");
   await run("document.querySelector('.worklog-actions button').click()");
   assert.equal(await run("document.querySelector('#worklogDescription').value"),'整理筛选条件');
@@ -127,6 +160,18 @@ app.whenReady().then(async()=>{
   const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
   assert.equal(state.todos[0].workLogs[0].day,yesterday.toLocaleDateString('sv-SE'));
   assert.equal(state.todos[0].workLogs[0].description,'补充验收说明');
+  assert.equal(state.todos[0].subtasks.length,2);
+  assert.equal(state.todos[0].subtasks.filter(item=>item.done).length,1);
+  assert.equal(state.todos[0].subtasks[1].title,'汇总遗留问题（更新）');
+ if(phase==='reopen'){
+  await run("document.querySelector('#listView').click()");
+  await wait("Boolean(document.querySelector('.todo-table tbody tr'))");
+  await run("document.querySelector('.todo-table tbody tr').click()");
+  await wait("document.querySelector('#detailTitle')?.textContent==='真实保存与重开'");
+  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 1/2');
+  assert.equal(await run("document.querySelectorAll('.subtask-item').length"),2);
+  await run("document.querySelector('#closeDrawer').click()");
+ }
  if(process.argv[4]){window.setContentSize(1200,750);await new Promise(r=>setTimeout(r,150));await fs.writeFile(process.argv[4],(await window.webContents.capturePage()).toPNG());}
  if(phase==='reopen'){
   await run("document.querySelector('#newTodo').click()");

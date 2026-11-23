@@ -1,5 +1,5 @@
 import {template} from './template.js';
-import {matchesQuery as matchTodo,compareTodos,dayKey,monthCells} from './query.js';
+import {matchesQuery as matchTodo,countTodosByGroup,compareTodos,dayKey,monthCells} from './query.js';
 import {HOUR_CHOICES,HOURS_ERROR,hoursValid} from '../../worklogs.js';
 import {bindWorkDate,closeCalendar,workDateMarkup} from '../work-date.js';
 
@@ -43,6 +43,7 @@ let scene = 'loading';
 let editingId = null;
 let editingGroupId = null;
 let editingCommentId = null;
+let editingSubtaskId = null;
 let pendingDelete = null;
 let toastTimer;
 let loadingTimer;
@@ -107,7 +108,7 @@ function setError(target, message) {
 // 主进程返回保存后的快照；离页后只完成保存，不触碰新页面。
 const pending = new Set();
 async function send(command, payload, errorTarget, control) {
- const key=command+':'+(payload.id||payload.todoId||'');
+ const key=command+':'+(payload.todoId?payload.todoId+':':'')+(payload.id||'');
  if(pending.has(key))return false;
  pending.add(key);
  const buttons=control ? [control] : errorTarget?.closest('form,dialog')?.querySelectorAll('button[type=submit],#confirmDelete,#saveGroupOrder') || [];
@@ -136,10 +137,14 @@ function isInCurrentView(todo) {
 
 function render() {
   const unavailable = scene !== 'normal';
+  // 传空分组串：分组数字统计同一筛选下的全部分组；currentGroup 只用于右侧列表。
+  const counts = unavailable ? null : countTodosByGroup(data.todos, query, data.groups);
   onCount(unavailable ? null : data.todos.filter(todo => todo.status !== '已完成').length,{loading:scene==='loading'});
   $('#currentGroupTitle').textContent = currentGroup ? groupName(currentGroup) : '全部';
   $('#currentGroupTitle').title = $('#currentGroupTitle').textContent;
-  $('#groupTotal').textContent = unavailable ? '' : data.todos.filter(todo => !currentGroup || todo.groupId === currentGroup).length + ' 项';
+  const groupTotal = unavailable ? 0 : (currentGroup ? (counts.byGroup.get(currentGroup) || 0) : counts.total);
+  $('#groupTotal').textContent = unavailable ? '' : groupTotal + ' 项';
+  $('#groupTotal').title = unavailable ? '' : '当前筛选下 ' + groupTotal + ' 项';
   $('#shell').classList.toggle('groups-collapsed', collapsed);
   $('#groupSidebar').hidden = collapsed;
   $('#expandGroups').hidden = !collapsed;
@@ -161,13 +166,13 @@ function render() {
   $('#filterCount').hidden = !filterCount;
   $('#filterCount').textContent = filterCount;
   ['newTodo', 'addGroup', 'manageGroups', 'statusTrigger', 'sortTrigger', 'statusFilter', 'sortRule', 'filterTrigger', 'searchTrigger', 'keyword'].forEach(id => { $('#' + id).disabled = unavailable; });
-  renderGroups(unavailable);
+  renderGroups(unavailable, counts);
   renderContent();
   renderDetail();
   if ($('#groupManager').open) renderGroupManager();
 }
 
-function renderGroups(disabled) {
+function renderGroups(disabled, counts) {
   const nav = $('#groupNav');
   nav.replaceChildren();
   [{id: '', name: '全部'}, ...orderedGroups()].forEach(group => {
@@ -178,7 +183,8 @@ function renderGroups(disabled) {
     button.dataset.groupId = group.id;
     button.title = group.name;
     if (currentGroup === group.id) button.setAttribute('aria-current', 'true');
-    button.append(element('span', 'group-name', group.name), element('span', 'group-number', disabled ? '—' : data.todos.filter(todo => !group.id || todo.groupId === group.id).length));
+    const count = disabled ? '—' : (group.id ? (counts.byGroup.get(group.id) || 0) : counts.total);
+    button.append(element('span', 'group-name', group.name), element('span', 'group-number', count));
     button.addEventListener('click', () => { currentGroup = group.id; closeDrawer(); render(); });
     row.append(button);
     nav.append(row);
@@ -438,6 +444,8 @@ function renderContent() {
     const totalHours = logs.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
     if (totalHours) subtitle.append(element('span', 'worklog-tag total', '总工时 ' + totalHours + ' h'));
     if (todo.comments.length) { const count = element('span', 'comment-count'); count.append(icon('comment'), document.createTextNode(todo.comments.length)); subtitle.append(count); }
+    const progress = subtaskProgress(todo);
+    if (progress) subtitle.append(element('span', 'status-badge subtask-progress' + (progress.done === progress.total ? ' done' : ''), progress.text));
     content.append(subtitle); title.append(mark, content); titleCell.append(title);
     const status = element('td'); status.append(element('span', 'status-badge ' + statusClass(todo.status), todo.status));
     const due = element('td', todo.dueDate ? 'date-cell' : 'unset', todo.dueDate ? dateLabel(todo.dueDate) : '未设置');
@@ -537,14 +545,14 @@ function changeMonth(direction) { month = new Date(month.getFullYear(), month.ge
 
 function openDrawer(id) {
   drawerReturnFocus = document.activeElement;
-  selectedId = id; editingCommentId = null; composerExpanded = false;
+  selectedId = id; editingCommentId = null; editingSubtaskId = null; composerExpanded = false;
   $('#detailDrawer').hidden = false; $('#drawerBackdrop').hidden = false;
   renderContent(); renderDetail(); $('#closeDrawer').focus();
 }
 
 function closeDrawer() {
   const previousId = selectedId;
-  selectedId = null; editingCommentId = null; composerExpanded = false;
+  selectedId = null; editingCommentId = null; editingSubtaskId = null; composerExpanded = false;
   $('#detailDrawer').hidden = true; $('#drawerBackdrop').hidden = true;
   const currentRow = previousId ? root.querySelector('[data-todo-id="' + CSS.escape(previousId) + '"]') : null;
   (currentRow || (drawerReturnFocus?.isConnected ? drawerReturnFocus : $('#newTodo'))).focus();
@@ -555,8 +563,128 @@ function detailAction(text, iconName, action, danger=false) {
   button.append(icon(iconName),document.createTextNode(text)); button.addEventListener('click',action); return button;
 }
 
+function subtaskProgress(todo) {
+ const list = todo.subtasks || [];
+ if (!list.length) return null;
+ const done = list.filter(item => item.done).length;
+ return {done,total:list.length,text:'已完成 '+done+'/'+list.length};
+}
+
+/** 子任务区只重建自身和列表行；保存/恢复滚动和焦点由 renderDetail 负责。 */
+function openSubtaskDialog(todo) {
+ const dialog = element('dialog', 'small-dialog'); dialog.id = 'subtaskDialog'; dialog.setAttribute('aria-labelledby', 'subtaskDialogTitle');
+ const dismiss = () => { dialog.close(); dialog.remove(); };
+ const header = element('header', 'dialog-header');
+ const heading = element('div');
+ const title = element('h2', '', '添加子任务'); title.id = 'subtaskDialogTitle';
+ const close = element('button', 'icon-button', '×'); close.type = 'button'; close.setAttribute('aria-label', '关闭添加子任务');
+ close.addEventListener('click', dismiss);
+ heading.append(title); header.append(heading, close);
+
+ const form = element('form', 'subtask-form'); form.id = 'subtaskForm'; form.noValidate = true;
+ const body = element('div', 'editor-body');
+ const field = element('div', 'field');
+ const label = element('label', '', '子任务标题'); label.htmlFor = 'subtaskTitle';
+ const input = element('input'); input.id = 'subtaskTitle'; input.placeholder = '例如：整理验收范围'; input.autocomplete = 'off';
+ const error = element('p', 'field-error'); error.id = 'subtaskError'; error.setAttribute('role', 'alert'); error.hidden = true;
+ field.append(label, input, error); body.append(field);
+
+ const footer = element('footer', 'dialog-footer');
+ const cancel = element('button', '', '取消'); cancel.type = 'button'; cancel.addEventListener('click', dismiss);
+ const submit = element('button', 'primary', '添加'); submit.type = 'submit'; submit.id = 'saveSubtask';
+ footer.append(cancel, submit);
+ form.append(body, footer); dialog.append(header, form);
+ form.addEventListener('submit', async event => {
+  event.preventDefault();
+  const name = input.value.trim();
+  if (!name) { setError(error, '请填写子任务标题'); input.focus(); return; }
+  const result = await send('todoSubtaskCreate', {todoId:todo.id,title:name}, error, submit);
+  if (!result) return;
+  dismiss();
+  renderDetail();
+  renderContent();
+  $('.subtask-add-trigger')?.focus();
+  showToast('子任务已添加');
+ });
+ dialog.addEventListener('cancel', event => { event.preventDefault(); dismiss(); });
+ root.append(dialog);
+ dialog.showModal();
+ input.focus();
+}
+
+function renderSubtasks(todo) {
+ const section = element('section', 'subtask-section');
+ const heading = element('div', 'subtask-heading');
+ heading.append(element('h3', '', '子任务'));
+ const list = todo.subtasks || [];
+ const progress = subtaskProgress(todo);
+ const meta = element('div', 'subtask-heading-meta');
+ if (progress) meta.append(element('span', 'status-badge subtask-count' + (progress.done === progress.total ? ' done' : ''), progress.text));
+ const addButton = element('button', 'text-action subtask-add-trigger', '＋ 添加子任务');
+ addButton.type = 'button';
+ addButton.addEventListener('click', () => openSubtaskDialog(todo));
+ meta.append(addButton);
+ heading.append(meta);
+ section.append(heading);
+
+ const error = element('p', 'field-error'); error.hidden = true; error.setAttribute('role', 'alert');
+ section.append(error);
+ if (!list.length) {
+  section.append(element('p', 'subtask-empty', '还没有子任务，点击右上角「添加」添加子任务。'));
+  return section;
+ }
+ const listNode = element('ul', 'subtask-list');
+ for (const subtask of list) {
+  const row = element('li', 'subtask-item' + (subtask.done ? ' done' : ''));
+  row.dataset.subtaskId = subtask.id;
+  if (editingSubtaskId === subtask.id) {
+   const body = element('div', 'subtask-body');
+   const edit = element('div', 'subtask-edit');
+   const editInput = element('input'); editInput.value = subtask.title; editInput.setAttribute('aria-label', '编辑子任务标题');
+   const save = element('button', '', '保存'); save.type = 'button';
+   const saveEdit = async () => {
+    const title = editInput.value.trim();
+    if (!title) { setError(error, '子任务标题不能为空'); editInput.focus(); return; }
+    const result = await send('todoSubtaskUpdate', {todoId:todo.id,id:subtask.id,title}, error, save);
+    if (!result) return;
+    editingSubtaskId = null;
+    renderDetail();
+    renderContent();
+    showToast('子任务已更新');
+   };
+   save.addEventListener('click', saveEdit);
+   const cancel = element('button', '', '取消'); cancel.type = 'button';
+   cancel.addEventListener('click', () => { editingSubtaskId = null; renderDetail(); });
+   editInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); saveEdit(); }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); editingSubtaskId = null; renderDetail(); }
+   });
+   edit.append(editInput, save, cancel); body.append(edit); row.append(body); listNode.append(row);
+   requestAnimationFrame(() => { editInput.focus(); editInput.select(); });
+   continue;
+  }
+  const checkbox = element('input', 'subtask-checkbox'); checkbox.type = 'checkbox'; checkbox.checked = subtask.done;
+  checkbox.setAttribute('aria-label', (subtask.done ? '恢复未完成：' : '完成子任务：') + subtask.title);
+  checkbox.addEventListener('change', async () => {
+   const result = await send('todoSubtaskSetDone', {todoId:todo.id,id:subtask.id,done:checkbox.checked}, null, checkbox);
+   if (!result) { renderDetail(); renderContent(); showToast('子任务状态保存失败，请重试'); return; }
+   renderDetail(); renderContent();
+   showToast(checkbox.checked ? '子任务已完成' : '子任务已恢复为未完成');
+  });
+  const body = element('div', 'subtask-body'); body.append(element('span', 'subtask-title', subtask.title));
+  const actions = element('div', 'subtask-actions');
+  const edit = element('button', 'text-action', '编辑'); edit.type = 'button';
+  edit.addEventListener('click', () => { editingSubtaskId = subtask.id; renderDetail(); });
+  const remove = element('button', 'text-action danger', '删除'); remove.type = 'button';
+  remove.addEventListener('click', () => askDelete('subtask', todo.id, subtask.id));
+  actions.append(edit, remove); row.append(checkbox, body, actions); listNode.append(row);
+ }
+ section.append(listNode);
+ return section;
+}
+
 function renderDetail() {
-  const panel=$('#detailPanel'); panel.replaceChildren();
+  const panel=$('#detailPanel'); const previousScroll=panel.querySelector('.detail-scroll')?.scrollTop||0; panel.replaceChildren();
   const todo=data.todos.find(item=>item.id===selectedId);
   if (!todo) return;
   const scroll=element('div','detail-scroll'); const heading=element('header','detail-heading');
@@ -582,8 +710,9 @@ function renderDetail() {
   if (!todo.comments.length) comments.append(element('p','comments-empty','还没有评论，记下第一条进展吧。'));
   todo.comments.slice().sort((a,b)=>new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime()).forEach(comment=>comments.append(renderComment(todo,comment)));
   const worklogSection=renderWorkLogs(todo);
-  scroll.append(heading,description,worklogSection,comments);
+  scroll.append(heading,description,renderSubtasks(todo),worklogSection,comments);
   panel.append(scroll);
+  scroll.scrollTop=previousScroll;
   if (composerExpanded) panel.append(renderComposer(todo));
   const bar = element('footer', 'detail-action-bar');
   const complete = element('button', todo.status === '已完成' ? '' : 'primary');
@@ -631,6 +760,14 @@ function openWorklogDialog(todo,{mode='add',entry=null}={}) {
   const form=element('form','worklog-form');form.noValidate=true;
   const body=element('div','worklog-body');
   body.append(element('p','worklog-target',todo.title));
+  const unfinished=(todo.subtasks||[]).filter(item=>!item.done).length;
+  if(mode==='complete'&&unfinished){
+   const notice=element('div','completion-notice');
+   const alert=element('span');alert.append(icon('alert'));
+   const copy=element('div');
+   copy.append(element('strong','','还有 '+unfinished+' 个未完成子任务'),document.createTextNode('完成后父待办会标记为“已完成”，这 '+unfinished+' 个子任务仍保持未完成。你可以返回继续处理，或仍然完成。'));
+   notice.append(alert,copy);body.append(notice);
+  }
 
   const today=localToday();
   let day=entry?.day||today;
@@ -957,30 +1094,43 @@ async function saveGroup(event) {
   $('#groupEditor').close();render();showToast(editingGroupId?'分组已重命名':'分组已创建');
 }
 
-function askDelete(kind,id,commentId=null) {
-  pendingDelete={kind,id,commentId};
+function askDelete(kind,id,targetId=null) {
+  pendingDelete={kind,id,targetId};
   let title,target,body,button;
   if(kind==='group'){
     const group=data.groups.find(item=>item.id===id);title='删除这个分组？';target=group.name;button='删除分组';
     body='仅删除分组，其下的 '+data.todos.filter(todo=>todo.groupId===id).length+' 条待办和评论将保留，变为未分组，可在“全部”中继续查看。';
   }else{
     const todo=data.todos.find(item=>item.id===id);
-    title=kind==='todo'?'永久删除这条待办？':'删除这条评论？';
-    target=kind==='todo'?todo.title:todo.comments.find(comment=>comment.id===commentId).content;
-    body=kind==='todo'?'这条待办及其全部 '+todo.comments.length+' 条评论将一并永久删除，删除后无法恢复。':'这条评论将被永久删除，待办和其他评论会保留。删除后无法恢复。';
-    button=kind==='todo'?'永久删除':'删除评论';
+    if(kind==='subtask'){
+     const subtask=todo.subtasks.find(item=>item.id===targetId);
+     title='删除这条子任务？';target=subtask.title;button='删除子任务';
+     body='删除后无法恢复；父待办和其他子任务会保留。';
+    }else{
+     title=kind==='todo'?'永久删除这条待办？':'删除这条评论？';
+     target=kind==='todo'?todo.title:todo.comments.find(comment=>comment.id===targetId).content;
+     if(kind==='todo'){
+      const parts=[];
+      if(todo.comments.length)parts.push(todo.comments.length+' 条评论');
+      if((todo.subtasks||[]).length)parts.push(todo.subtasks.length+' 条子任务');
+      body=parts.length?'这条待办及其全部 '+parts.join('和 ')+'将一并永久删除，删除后无法恢复。':'这条待办将被永久删除，删除后无法恢复。';
+     }else body='这条评论将被永久删除，待办和其他评论会保留。删除后无法恢复。';
+     button=kind==='todo'?'永久删除':'删除评论';
+    }
   }
   $('#confirmTitle').textContent=title;$('#confirmTarget').textContent=target;$('#confirmBody').textContent=body;$('#confirmDelete').textContent=button;
   setError($('#confirmError'),'');$('#confirmDialog').showModal();$('#cancelDelete').focus();
 }
 
 async function confirmDelete() {
-  const {kind,id,commentId}=pendingDelete;
-  const command=kind==='group'?'todoGroupDelete':kind==='todo'?'todoDelete':'todoCommentDelete';
-  if(!await send(command,kind==='comment'?{todoId:id,id:commentId}:{id},$('#confirmError'),$('#confirmDelete')))return;
+  const {kind,id,targetId}=pendingDelete;
+  const command=kind==='group'?'todoGroupDelete':kind==='todo'?'todoDelete':kind==='subtask'?'todoSubtaskDelete':'todoCommentDelete';
+  const payload=kind==='comment'||kind==='subtask'?{todoId:id,id:targetId}:{id};
+  if(!await send(command,payload,$('#confirmError'),$('#confirmDelete')))return;
   $('#confirmDialog').close();
   if(kind==='group'&&currentGroup===id)currentGroup='';
   if(kind==='todo'){commentDrafts.delete(id);closeDrawer();}
+  if(kind==='subtask'){renderDetail();renderContent();showToast('子任务已删除');return;}
   render();showToast(kind==='group'?'分组已删除，待办及评论已保留':kind==='todo'?'待办及其评论已永久删除':'评论已删除');
 }
 

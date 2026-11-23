@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {matchesQuery,compareTodos,monthCells} from '../app/ui/todo/query.js';
+import {matchesQuery,countTodosByGroup,compareTodos,monthCells} from '../app/ui/todo/query.js';
 test('TODO query uses AND, searches description but never comments',()=>{
  const todo={title:'Report',description:'ALPHA detail',groupId:'g',status:'待处理',priority:'高',dueDate:'2026-11-12',comments:[{content:'secret'}]};
  const q={status:'待处理',priority:'高',dateMode:'range',from:'2026-11-12',to:'2026-11-12',keyword:' alpha '};
@@ -39,4 +39,24 @@ test('TODO Q8 filter branches include date endpoints and missing values',()=>{
  assert.equal(ids({status:'待处理',priority:'高',dateMode:'range',from:'2026-11-12',to:'2026-11-12',keyword:'alpha'},'g1'),'A');
  assert.equal(ids({keyword:'   '}),'HGFEDCBA');
  assert.equal(ids({dateMode:'range',from:'',to:''}),'HGFEDCBA');
+});
+
+test('TODO group counts follow every active filter and ignore sort/view',()=>{
+ const groups=[{id:'g1',name:'A'},{id:'g2',name:'B'}];
+ const count=(q={})=>countTodosByGroup(rows,q,groups);
+ const expected=(total,g1,g2)=>({total,g1,g2});
+ const pick=({total,byGroup})=>({total,g1:byGroup.get('g1'),g2:byGroup.get('g2')});
+ assert.deepEqual(pick(count()),expected(8,5,2),'无筛选时全部和分组总计');
+ assert.deepEqual(pick(count({status:'待处理'})),expected(4,2,1));
+ assert.deepEqual(pick(count({status:'已完成'})),expected(2,1,1));
+ assert.deepEqual(pick(count({priority:'高'})),expected(2,2,0));
+ assert.deepEqual(pick(count({priority:'unset'})),expected(2,1,0));
+ assert.deepEqual(pick(count({dateMode:'range',from:'2026-11-11',to:'2026-11-12'})),expected(4,2,2));
+ assert.deepEqual(pick(count({dateMode:'undated'})),expected(2,1,0));
+ assert.deepEqual(pick(count({keyword:'  aLpHa  '})),expected(5,4,1));
+ assert.deepEqual(pick(count({status:'待处理',priority:'高',dateMode:'range',from:'2026-11-12',to:'2026-11-12',keyword:'alpha'})),expected(1,1,0));
+ assert.deepEqual(pick(count({keyword:'没有命中'})),expected(0,0,0));
+ assert.deepEqual(pick(count({sort:'created-asc'})),expected(8,5,2),'排序不影响数量');
+ assert.equal(countTodosByGroup(rows,{},groups).total,8,'未分组只计入全部');
+ assert.deepEqual([...countTodosByGroup(rows,{},groups).byGroup.keys()],['g1','g2']);
 });

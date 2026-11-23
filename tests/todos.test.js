@@ -106,3 +106,85 @@ test('TODO a read I/O error remains separate from empty and succeeds after permi
  try{await assert.rejects(call('todoLoad'),e=>e.code==='TODO_READ_FAILED');}finally{await chmod(file,0o600);}
  assert.equal((await call('todoLoad')).state.todos[0].title,'keep');
 });
+
+test('TODO subtasks create, check, edit, delete and persist in order', async t => {
+ const {call,root}=await fixture(t);const id=(await call('todoCreate',{title:'parent'})).id;
+ const created=await call('todoSubtaskCreate',{todoId:id,title:'  first  '});
+ assert.equal(created.state.todos[0].subtasks[0].title,'first');
+ assert.equal(created.state.todos[0].subtasks[0].done,false);
+ const first=created.id;
+ const second=(await call('todoSubtaskCreate',{todoId:id,title:'second'})).id;
+ assert.deepEqual((await call('todoLoad')).state.todos[0].subtasks.map(row=>row.title),['first','second']);
+ let result=await call('todoSubtaskSetDone',{todoId:id,id:first,done:true});
+ assert.equal(result.state.todos[0].subtasks[0].done,true);
+ assert.equal(result.state.todos[0].subtasks[1].done,false);
+ result=await call('todoSubtaskUpdate',{todoId:id,id:second,title:'  updated  '});
+ assert.equal(result.state.todos[0].subtasks[1].title,'updated');
+ assert.equal(result.state.todos[0].subtasks[1].done,false);
+ result=await call('todoSubtaskDelete',{todoId:id,id:first});
+ assert.deepEqual(result.state.todos[0].subtasks.map(row=>row.title),['updated']);
+ const reopened=(await new Store(root).loadPersonalTodos()).todos[0];
+ assert.deepEqual(reopened.subtasks.map(row=>row.title),['updated']);
+ assert.equal(reopened.subtasks[0].done,false);
+});
+
+test('TODO subtask validation rejects invalid fields and foreign targets without writing', async t => {
+ const {call,file}=await fixture(t);const a=(await call('todoCreate',{title:'a'})).id,b=(await call('todoCreate',{title:'b'})).id;
+ const sub=(await call('todoSubtaskCreate',{todoId:a,title:'keep'})).id;
+ const before=await readFile(file,'utf8');
+ const invalid=[
+  ['todoSubtaskCreate',{todoId:a,title:' '}],
+  ['todoSubtaskCreate',{todoId:'missing',title:'x'}],
+  ['todoSubtaskUpdate',{todoId:a,id:'missing',title:'x'}],
+  ['todoSubtaskUpdate',{todoId:b,id:sub,title:'x'}],
+  ['todoSubtaskSetDone',{todoId:a,id:sub,done:'true'}],
+  ['todoSubtaskSetDone',{todoId:a,id:'missing',done:true}],
+  ['todoSubtaskDelete',{todoId:b,id:sub}],
+  ['todoSubtaskDelete',{todoId:a,id:'missing'}],
+  ['todoSubtaskCreate',null],
+ ];
+ for(const [command,data] of invalid){await assert.rejects(call(command,data),e=>e.code==='TODO_VALIDATION'&&Boolean(e.field),command);assert.equal(await readFile(file,'utf8'),before,command);}
+});
+
+test('TODO old todos without subtasks load as empty and invalid subtasks fail without replacement', async t => {
+ const {call,file}=await fixture(t);const id=(await call('todoCreate',{title:'legacy'})).id;
+ const state=JSON.parse(await readFile(file,'utf8'));delete state.todos[0].subtasks;
+ await writeFile(file,JSON.stringify(state));const before=await readFile(file,'utf8');
+ assert.deepEqual((await call('todoLoad')).state.todos[0].subtasks,[]);
+ assert.equal(await readFile(file,'utf8'),before);
+ const invalid=[
+  {subtasks:null},
+  {subtasks:{}},
+  {subtasks:[{id:'x',title:'',done:false}]},
+  {subtasks:[{id:'x',title:'x',done:'false'}]},
+  {subtasks:[{id:'x',title:'x',done:false},{id:'x',title:'y',done:false}]},
+ ];
+ for(const change of invalid){
+  const next=JSON.parse(await readFile(file,'utf8'));Object.assign(next.todos[0],change);await writeFile(file,JSON.stringify(next));const bytes=await readFile(file,'utf8');
+  await assert.rejects(call('todoLoad'),e=>e.code==='TODO_READ_FAILED');assert.equal(await readFile(file,'utf8'),bytes);
+ }
+});
+
+test('TODO new todos include an empty subtask list and parent deletion removes them', async t => {
+ const {call,file,root}=await fixture(t);const id=(await call('todoCreate',{title:'parent'})).id;
+ assert.deepEqual((await call('todoLoad')).state.todos[0].subtasks,[]);
+ await call('todoSubtaskCreate',{todoId:id,title:'child'});
+ assert.equal(JSON.parse(await readFile(file,'utf8')).todos[0].subtasks.length,1);
+ const result=await call('todoDelete',{id});
+ assert.deepEqual(result.state.todos,[]);
+ assert.deepEqual(await new Store(root).loadPersonalTodos(),{groups:[],todos:[]});
+});
+
+test('TODO subtask operations update parent updatedAt without changing other fields', async t => {
+ const root=await mkdtemp(join(tmpdir(),'personal-todo-clock-'));t.after(()=>rm(root,{recursive:true,force:true}));
+ const store=new Store(root);let n=0;const times=['2026-11-11T09:00:00Z','2026-11-11T09:01:00Z','2026-11-11T09:02:00Z','2026-11-11T09:03:00Z','2026-11-11T09:04:00Z'];
+ const service=new WorkbenchService({store,today:()=> '2026-11-11',todoId:()=> 'id-'+(++n),todoNow:()=>new Date(times.shift())});
+ const call=(command,data)=>service.call(command,data);
+ const id=(await call('todoCreate',{title:'parent'})).id;const before=(await call('todoLoad')).state.todos[0];
+ const sub=(await call('todoSubtaskCreate',{todoId:id,title:'child'})).id;
+ await call('todoSubtaskSetDone',{todoId:id,id:sub,done:true});
+ await call('todoSubtaskUpdate',{todoId:id,id:sub,title:'updated'});
+ const after=(await call('todoLoad')).state.todos[0];
+ assert.equal(after.status,before.status);assert.equal(after.groupId,before.groupId);assert.deepEqual(after.comments,before.comments);
+ assert.notEqual(after.updatedAt,before.updatedAt);assert.ok(new Date(after.updatedAt)>new Date(before.updatedAt));
+});

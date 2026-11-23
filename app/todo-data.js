@@ -73,6 +73,17 @@ export function todoWorkLogPatch(value) {
  if(!Object.keys(patch).length)throw todoValidation('请填写要修改的工时','workLog');
  return patch;
 }
+
+/** 子任务标题与现有待办标题共用必填、去首尾空白规则。 */
+export function todoSubtaskTitle(value) {
+ return todoText(value,'title',{required:true,trim:true});
+}
+/** 完成状态必须是布尔值，不能用字符串或空值代替。 */
+export function todoSubtaskDone(value) {
+ if(typeof value!=='boolean')throw todoValidation('请选择有效的子任务完成状态','done');
+ return value;
+}
+
 export const sumWorkLogs = (todo,{pendingOnly=false}={}) => (todo?.workLogs || [])
  .filter(entry=>!pendingOnly||entry.state!=='submitted')
  .reduce((sum,entry)=>sum+Number(entry.hours||0),0);
@@ -102,6 +113,14 @@ export function validateTodoState(value) {
   for(const field of ['title','description','dueDate','priority','groupId'])if(!Object.hasOwn(todo,field))throw todoValidation('本机待办缺少字段',field);
   todoFields(todo,{create:true});todoChoice(todo.status,todoStatuses,'status');time(todo.createdAt);time(todo.updatedAt);
   if(todo.groupId&&!groups.has(todo.groupId))throw todoValidation('本机待办分组不存在','groupId');
+  // 旧记录没有子任务字段时按空数组读取；存在但格式不正确仍按文件损坏处理。
+  if(todo.subtasks===undefined)todo.subtasks=[];
+  if(!Array.isArray(todo.subtasks))throw todoValidation('本机子任务格式不正确','subtasks');
+  const subtaskIds=new Set();
+  for(const subtask of todo.subtasks){
+   todoObject(subtask,'subtasks');unique(subtaskIds,subtask.id,'subtaskId');
+   todoSubtaskTitle(subtask.title);todoSubtaskDone(subtask.done);
+  }
   // 完成时间与工时账本是在旧数据之后新增的字段，缺省视为未填写，不能因此判定文件损坏。
   if(todo.completedAt!==undefined)time(todo.completedAt);
   if(todo.workLogs!==undefined&&todo.workLogs!==null){
