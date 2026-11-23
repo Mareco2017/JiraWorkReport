@@ -705,7 +705,7 @@ function renderDetail() {
   const description=element('section','description-section'); description.append(element('h3','','详细说明'),element('p',todo.description?'description-text':'empty-description',todo.description||'暂未填写详细说明'));
   const times=element('div','time-meta'); times.append(element('span','','创建于 '+timeLabel(todo.createdAt)),element('span','','最近修改 '+timeLabel(todo.updatedAt))); description.append(times);
   const comments=element('section','comments-section'); const commentTitle=element('div','comments-title'); commentTitle.append(element('h3','','评论'),element('span','',todo.comments.length)); comments.append(commentTitle);
-  if (!todo.comments.length) comments.append(element('p','comments-empty','还没有评论，记下第一条进展吧。'));
+  if (!todo.comments.length) comments.append(element('p','worklog-empty comments-empty','还没有评论，记下第一条进展吧。'));
   todo.comments.slice().sort((a,b)=>new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime()).forEach(comment=>comments.append(renderComment(todo,comment)));
   const worklogSection=renderWorkLogs(todo);
   scroll.append(heading,description,renderSubtasks(todo),worklogSection,comments);
