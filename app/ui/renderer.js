@@ -1,7 +1,7 @@
 import {mountTodo} from './todo/view.js';
 import {templates} from './templates.js';
 import {typeMapping,monthlyTasks,requirementTasks,taskForType,isMonthlyType,validateRecord,isCompletedItem,HOUR_CHOICES,HOURS_ERROR,hoursValid} from '../worklogs.js';
-import {attachIssueClear,refreshIssueClear} from './issue-input.js';
+import {bindIssueSearch,closeIssueSearch,refreshIssueClear} from './issue-input.js';
 import {openRecordEditor} from './record-editor.js';
 import {bindWorkDate,closeCalendar,labelDay,workDateMarkup} from './work-date.js';
 
@@ -82,6 +82,31 @@ async function call(name,payload={}){
  if(!response.ok)throw Object.assign(new Error(response.error),{code:response.code,field:response.field});
  return response.value;
 }
+// 字段级错误只允许成对出现：有红框就有文案，有文案就能定位到对应控件。
+// 控件 id 与提示 id 并非同构（子任务名称的提示是 task-error），所以显式映射而不是拼字符串。
+const errorTargets={
+ date:['#date','#date-error'],description:['#description','#description-error'],hours:['#hours','#hours-error'],
+ issue:['#issue','#issue-error'],task:['#taskName','#task-error']
+};
+// 子任务号类错误没有独立提示位：只放在表单底部提示条并聚焦对应控件，不能把红框打到工单字段上。
+function fieldParts(field){return (errorTargets[field]||errorTargets.issue).map(selector=>$(selector));}
+function showFieldError(field,message){
+ const [input,box]=fieldParts(field);
+ if(box){box.textContent=message;box.hidden=false;}
+ input?.setAttribute('aria-invalid','true');
+ const entry=$('#entryError');if(entry)entry.textContent=message;
+}
+function clearFieldError(field){
+ const [input,box]=fieldParts(field);
+ if(box){box.textContent='';box.hidden=true;}
+ input?.removeAttribute('aria-invalid');
+ const entry=$('#entryError');if(entry)entry.textContent='';
+}
+function clearEntryErrors(){for(const field of Object.keys(errorTargets))clearFieldError(field);}
+// 工单输入框的查询与详情由页面注入；日填报和批量两处调用点共用同一实现，控件本身不持有 IPC。
+const searchIssueRows=async query=>{const response=await call('searchIssues',{query});return response.issues || response;};
+const loadIssueDetail=key=>call('getIssue',{key});
+const reportIssueError=error=>toast(error.message);
 // 连接行与状态点常驻；刷新业务快照时仅更新真正改变的文字和状态。
 function updateConnection(row,label,configured){
  if(row.lastChild.nodeValue!==label)row.lastChild.nodeValue=label;
@@ -118,7 +143,7 @@ async function navigate(next){
   while(main.firstChild)view.append(main.firstChild);
   pageViews.set(page,view);
  }
- closeCalendar();document.querySelector('.hours-popover')?.remove();document.querySelector('.issue-results')?.remove();
+ closeCalendar();closeIssueSearch();document.querySelector('.hours-popover')?.remove();
  page=next;
  // 待办不依赖initialize；原工时快照和缓存继续归原页面管理。
  if(page==='todo'){
@@ -192,6 +217,7 @@ function subtaskHelp(id,label,text){
 }
 function renderTask(){
  const input=$('#issue'),optional=Boolean(requirementTasks[selectedType]),day=$('#date').value;
+ const beforeValue=input.value;
  if(input.readOnly&&optional)input.value='';
  const hasRequirement=Boolean(issueSelection?.key);
  const defaultTask=taskForType(selectedType,hasRequirement);
@@ -201,21 +227,24 @@ function renderTask(){
  const wasReadonly=input.readOnly;input.readOnly=monthly&&!optional;
  $('#issueLabel').textContent=optional?'关联需求／综合工时单':monthly?'关联综合工时单':'关联需求工单';
  input.placeholder=optional?'输入需求单号或标题，留空使用月度工单':'输入工单号或标题关键词';
- if(monthly&&!optional)input.value=binding?binding.key+' · '+binding.title:day.slice(0,7)+' 产品综合工时管理';
- else if(issueSelection?.key)input.value=issueSelection.key+(issueSelection.title?' · '+issueSelection.title:'');
- else if(wasReadonly)input.value='';
+ let painted=input.value!==beforeValue;
+ if(monthly&&!optional){input.value=binding?binding.key+' · '+binding.title:day.slice(0,7)+' 产品综合工时管理';painted=true;}
+ else if(issueSelection?.key){input.value=issueSelection.key+(issueSelection.title?' · '+issueSelection.title:'');painted=true;}
+ else if(wasReadonly){input.value='';painted=true;}
  $('#monthlyStatus').hidden=!monthly;
  $('#monthlyStatus').textContent=binding?(optional?'使用月度工单 · ':'已创建 · ')+binding.key+' · '+binding.title:(optional?'未指定需求单时使用 ':'')+day.slice(0,7)+' 综合工时单 · 提交时查找或创建';
  const existing=monthly?(binding?monthlySubtaskCache.get(binding.key)||[]:[]):(issueSelection?.subtasks||[]);
  const exists=existing.some(row=>(row.title||row.fields?.summary)===selectedTask);
  $('#taskNameHelp').innerHTML=subtaskHelp('taskNote','子任务名称',exists?'已存在同名子任务，提交时复用':'提交时自动创建同名子任务');
  $('#subtasks').innerHTML='<input id="taskName" maxlength="255" autocomplete="off" value="'+escapeText(selectedTask)+'" placeholder="填写子任务名称"><p class="field-error" id="task-error" role="alert" hidden></p>';
- $('#taskName').oninput=event=>{selectedTask=event.target.value;taskEdited=true;setError($('#task-error'),'');};
+ $('#taskName').oninput=event=>{selectedTask=event.target.value;taskEdited=true;clearFieldError('task');};
  if(monthly&&!optional&&binding&&!monthlySubtaskCache.has(binding.key)){
   monthlySubtaskCache.set(binding.key,[]);
   call('getIssue',{key:binding.key}).then(issue=>{monthlySubtaskCache.set(binding.key,issue.subtasks||[]);if(page==='daily')renderTask();}).catch(()=>{});
  }
  renderSubtaskChoice(selectedTask,monthly,binding);
+ // 月单只读回填、选中回填、切类型清空都是程序化改写：把值固定成“已选中”，并收掉旧的工单红边。
+ if(painted){input.dataset.picked=input.value;clearFieldError('issue');}
  refreshIssueClear(input);
 }
 // 子任务工单：能拿到该工单子任务时下拉，取不到时手填；留空仍走自动匹配/创建。
@@ -247,34 +276,6 @@ function renderSubtaskChoice(task,monthly,binding){
   };
  }
 }
-function issueSearch(input,chosen,onQuery=()=>{}){
- const refreshClear=attachIssueClear(input);
- let timer,revision=0;input.oninput=()=>{
-  // 选中后输入框里是"KEY · 标题"，没有编辑就不应再搜一次，避免误报未找到。
-  if(input.dataset.picked&&input.value===input.dataset.picked)return;
-  delete input.dataset.picked;
-  const current=++revision,query=input.value.trim();
-  onQuery();clearTimeout(timer);document.querySelectorAll('.issue-results').forEach(list=>list.remove());
-  if(!query)return;
-  timer=setTimeout(safe(async()=>{
-   const response=await call('searchIssues',{query});let rows=response.issues || response;
-   // 直接输入完整工单号时，即使它不是故事类型（任务/子任务等）也应能选中。
-   if(!rows.length&&/^[A-Z][A-Z0-9_]*-\d+$/.test(query)){
-    try{const detail=await call('getIssue',{key:query});if(current!==revision)return;rows=[detail];}catch{}
-   }
-   // A completed selection or a cleared query must not be replaced by an older search response.
-   if(current!==revision)return;
-   const list=document.createElement('div');list.className=page==='batch'?'issue-results issue-candidates row-popover':'issue-results';
-   for(const row of rows){const button=document.createElement('button');button.type='button';if(page==='batch'){button.className='candidate';button.innerHTML=escapeText(row.key)+'<span>'+escapeText(row.title||row.fields?.summary||'')+'</span>';}else button.textContent=row.key+' · '+(row.title || row.fields?.summary || '');button.onclick=safe(async()=>{
-    const selection=++revision;clearTimeout(timer);list.remove();
-    const detail=await call('getIssue',{key:row.key});if(selection!==revision)return;
-    chosen({...row,...detail,subtasks:detail.subtasks || detail.fields?.subtasks || []});input.value=page==='batch'?row.key:button.textContent;input.dataset.picked=input.value;refreshClear();closeBatchPopup();
-   });list.append(button);}
-   if(!rows.length)list.textContent='未找到可访问的工单';
-   if(page==='batch')placeBatchPopup(input,list);else input.parentElement.append(list);
-  }),280);
- };
-}
 function daily(){
  // 工时快捷块由统一常量生成，避免模板与校验规则各写一份。
  $('#hoursButtons').innerHTML=hoursButtonsHtml();
@@ -285,11 +286,16 @@ function daily(){
  document.querySelectorAll('[data-hours]').forEach(button=>button.onclick=()=>{$('#hours').value=button.dataset.hours;syncHours();});
  $('#hours').addEventListener('input',syncHours);
  for(const field of ['date','description','hours','issue']){
-  $('#'+field).addEventListener('input',()=>{$('#'+field+'-error').hidden=true;$('#'+field).removeAttribute('aria-invalid');$('#entryError').textContent='';});
+  $('#'+field).addEventListener('input',()=>clearFieldError(field));
  }
  $('#configureTypes').onclick=()=>typeDialog(true);
  $('[data-open-batch]').onclick=safe(()=>navigate('batch'));
- issueSearch($('#issue'),row=>{issueSelection=row;selectedSubtask=null;renderTask();},()=>{issueSelection=null;selectedSubtask=null;renderTask();});
+ bindIssueSearch($('#issue'),{
+  search:searchIssueRows,load:loadIssueDetail,onError:reportIssueError,
+  // 选中与清空都归页面：控件只回报结果，不碰字段错误状态。
+  onSelect:row=>{issueSelection=row;selectedSubtask=null;renderTask();clearFieldError('issue');},
+  onQuery:()=>{issueSelection=null;selectedSubtask=null;renderTask();}
+ });
  $('#issue').addEventListener('change',safe(async()=>{
   const key=$('#issue').value.trim().split(/\s+/)[0];
   if(!/^[A-Z][A-Z0-9_]*-\d+$/.test(key)||issueSelection?.key===key)return;
@@ -304,11 +310,12 @@ function daily(){
    validateRecord(record,{today:snapshot.today});if(!types.includes(record.type))throw new Error('请选择当前可用的工时类型');
   }
   catch(error){
-   const field={day:'date',title:'description',hours:'hours',issue:'issue',type:'issue',task:'taskName'}[error.field]||'issue';
-   $('#'+field+'-error').textContent=error.message;$('#'+field+'-error').hidden=false;
-   $('#'+field).setAttribute('aria-invalid','true');$('#'+field).focus();$('#entryError').textContent=error.message;return;
+   const field={day:'date',title:'description',hours:'hours',issue:'issue',type:'issue',task:'task',subtask:'subtask'}[error.field]||'issue';
+   // 子任务号错误没有独立提示位：只提示并聚焦对应控件，不能把红框打到工单字段上。
+   if(field==='subtask'){$('#entryError').textContent=error.message;($('#subtaskInput')||$('#subtaskSelect'))?.focus();return;}
+   showFieldError(field,error.message);fieldParts(field)[0]?.focus();return;
   }
-  await call('saveDraft',{record});delete $('#entry').dataset.editId;$('#description').value='';$('#entryError').textContent='';selectedTask='';taskEdited=false;$('#description').focus();await refresh();renderQueue();renderTask();
+  await call('saveDraft',{record});delete $('#entry').dataset.editId;$('#description').value='';clearEntryErrors();selectedTask='';taskEdited=false;$('#description').focus();await refresh();renderQueue();renderTask();
  });
  $('#submit').onclick=safe(()=>submitRecords(snapshot.state.drafts.filter(row=>row.source!=='批量填报')));
  renderDailyTypes();renderTask();renderQueue();
@@ -785,15 +792,22 @@ input.addEventListener('change',safe(async()=>{
    }
    if(optional)input.placeholder='留空使用月度工单';
    // Rows may switch from a monthly type to a requirement type without being rebuilt.
-   issueSearch(input,issue=>{
-    row.issue=issue.key;row.issueTitle=issue.title;row.issueQuery='';if(row.taskSource!=='manual'||!String(row.task||'').trim())row.task=taskForType(row.type,true);tr.querySelector('[data-field=task]').value=row.task||'';
-    clearAutomaticSubtask();
-    markMissing();safe(save)();updateBatchTotals();if(step===3)reviewBatch();autoFill();
-   },()=>{
-    // Keep an unfinished query when the user returns from confirmation, so it remains selectable or clearable.
-    row.issue='';row.issueTitle='';row.issueQuery=input.value;if(row.taskSource!=='manual'||!String(row.task||'').trim())row.task=taskForType(row.type,false);tr.querySelector('[data-field=task]').value=row.task||'';
-    clearAutomaticSubtask();
-    markMissing();safe(save)();updateBatchTotals();
+   bindIssueSearch(input,{
+    search:searchIssueRows,load:loadIssueDetail,onError:reportIssueError,
+    listClass:'issue-results issue-candidates row-popover',place:placeBatchPopup,onClose:()=>closeBatchPopup(),
+    valueFor:row=>row.key,
+    renderRow:(button,row)=>{button.className='candidate';button.innerHTML=escapeText(row.key)+'<span>'+escapeText(row.title||row.fields?.summary||'')+'</span>';},
+    onSelect:issue=>{
+     row.issue=issue.key;row.issueTitle=issue.title;row.issueQuery='';if(row.taskSource!=='manual'||!String(row.task||'').trim())row.task=taskForType(row.type,true);tr.querySelector('[data-field=task]').value=row.task||'';
+     clearAutomaticSubtask();
+     markMissing();safe(save)();updateBatchTotals();if(step===3)reviewBatch();autoFill();
+    },
+    onQuery:()=>{
+     // Keep an unfinished query when the user returns from confirmation, so it remains selectable or clearable.
+     row.issue='';row.issueTitle='';row.issueQuery=input.value;if(row.taskSource!=='manual'||!String(row.task||'').trim())row.task=taskForType(row.type,false);tr.querySelector('[data-field=task]').value=row.task||'';
+     clearAutomaticSubtask();
+     markMissing();safe(save)();updateBatchTotals();
+    }
    });
    $('#editRows').append(tr);
    if(row.issue&&row.task&&!row.subtaskKey)autoFill();

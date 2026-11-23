@@ -26,6 +26,9 @@ app.whenReady().then(async()=>{
   if(failNextBatch){failNextBatch=false;value={id:'failed-batch',running:false,items:payload.records.map(item=>({...item,status:'failed',error:'模拟上传失败',retryable:true,batchId:'failed-batch'}))};}
   else value={id:'resubmitted-'+(++resubmission),running:false,items:payload.records.map(item=>({...item,status:'success',worklogId:'recovered-worklog'}))};recoveryBatches.set(value.id,value);state.batches.push(value);}
   else if(name==='saveDraft'){const index=state.drafts.findIndex(row=>row.id===payload.record.id);if(index>=0)state.drafts[index]=payload.record;value=state;}
+  // 批量行的工单候选与详情：只服务“工单输入控件”的回归，返回虚构工单。
+  else if(name==='searchIssues')value={issues:String(payload.query).includes('候选')?[{id:'9',key:'DEMO-900',title:'候选需求单',project:'DEMO',typeId:'10001',subtasks:[]}]:[]};
+  else if(name==='getIssue')value={id:'9',key:payload.key,title:'候选需求单',project:'DEMO',typeId:'10001',subtasks:[]};
   else return {ok:false,error:'unexpected '+name};
   return {ok:true,value};
  });
@@ -207,6 +210,27 @@ app.whenReady().then(async()=>{
  await wait("document.querySelector('#step1')&&document.querySelector('#step1').classList.contains('active')");
  assert.equal(await run("document.querySelector('#confirmPanel').hidden"),true,'成功后应回到首页');
  assert.equal(await run("document.querySelector('#choosePanel').hidden"),false);
+
+ // 工单输入控件（批量行）：候选浮层挂在 body、选中后写回工单号并保存草稿。
+ await run("document.querySelector('.week-file')?.click()");
+ await wait("!document.querySelector('#read').disabled");
+ await run("document.querySelector('#read').click()");
+ await wait("!document.querySelector('#confirmPanel').hidden");
+ await wait("Boolean(document.querySelector('[data-issue]'))");
+ const issueField="document.querySelector('[data-issue]')";
+ await run(`(()=>{const input=${issueField};input.focus();input.value='候选';input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+ await wait("document.querySelectorAll('.issue-results button').length===1");
+ const picker=await run(`(()=>{const list=document.querySelector('.issue-results'),button=list.querySelector('button');return {inBody:list.parentElement===document.body,candidate:button.classList.contains('candidate'),label:button.textContent,value:${issueField}.value};})()`);
+ assert.equal(picker.inBody,true,'批量候选浮层应挂在 body');
+ assert.equal(picker.candidate,true,'批量候选使用 candidate 样式');
+ assert.equal(picker.label,'DEMO-900候选需求单','批量候选展示工单号与标题');
+ assert.equal(picker.value,'候选','选中前不写回工单号');
+ await run("document.querySelector('.issue-results button').click()");
+ await wait(`${issueField}.value==='DEMO-900'`);
+ assert.equal(await run("document.querySelectorAll('.issue-results').length"),0,'选中后候选应收起');
+ assert.equal(await run(`${issueField}.readOnly`),false,'需求类工单保持可编辑');
+ for(let n=0;n<40&&!state.drafts.some(row=>row.issue==='DEMO-900');n++)await new Promise(resolve=>setTimeout(resolve,50));
+ assert.ok(state.drafts.some(row=>row.issue==='DEMO-900'),'选中工单应保存到草稿');
 
  assert.equal(errors.length,0,errors.join('\n'));
  console.log('BATCH_UI_PASS');window.destroy();app.quit();
