@@ -473,7 +473,7 @@
 
 /* 工时账本：标题/计数/操作同一行，行内日期-工时-状态-操作四列对齐。 */
 .todo-product .worklog-section{margin-top:24px;padding-top:16px;border-top:1px solid var(--exe-divider)}
-.todo-product .worklog-heading{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.todo-product .worklog-heading{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .todo-product .worklog-heading h3{font-size:13px;font-weight:600;color:#43536a;margin:0}
 .todo-product .worklog-count{font-size:12px;line-height:20px;color:var(--exe-text-tertiary);font-variant-numeric:tabular-nums}
 .todo-product .worklog-heading .worklog-add{margin-left:auto;font-size:12px;line-height:20px;color:var(--exe-brand-click)}
@@ -494,7 +494,7 @@
 .todo-product .worklog-actions .text-action.danger:hover{color:var(--exe-danger,#FA494C)}
 .todo-product .worklog-total{margin:0;padding:12px 8px;display:flex;justify-content:flex-end;gap:8px;font-size:12px;line-height:20px;color:var(--exe-text-secondary);font-variant-numeric:tabular-nums}
 .todo-product .worklog-total::before{content:"合计";color:var(--exe-text-tertiary)}
-.todo-product .worklog-empty{margin:0;padding:16px;border-radius:8px;background:#F7F8FA;text-align:center;font-size:12px;line-height:20px;color:var(--exe-text-tertiary)}
+.todo-product .worklog-empty{margin:0;padding:16px;border-radius:8px;background:#FAFBFC;text-align:center;font-size:12px;line-height:20px;color:var(--exe-text-tertiary)}
 .todo-product .worklog-dialog{width:420px}
 .todo-product .worklog-dialog .dialog-header{padding:20px 24px 16px;border-bottom:1px solid var(--exe-divider)}
 .todo-product .worklog-dialog .dialog-header h2{font-size:16px;line-height:24px;font-weight:500;color:var(--exe-text-heading)}
@@ -545,7 +545,7 @@
   margin:24px 23px 0; padding:0; border-top:0;
 }
 .todo-product .subtask-heading {
-  display:flex; align-items:center; gap:8px; margin-bottom:8px;
+  display:flex; align-items:center; gap:8px; margin-bottom:12px;
 }
 .todo-product .subtask-heading h3 {
   font-size:13px; font-weight:600; color:#43536a; margin:0;
@@ -598,3 +598,5 @@
   display:block; margin-bottom:2px; font-size:12px; font-weight:600; color:#8a4f2c;
 }
 .todo-product .worklog-dialog .completion-notice { margin:0; }
+
+/* 评论以标题下 8px 为基准；子任务/工时记录空状态再增加 4px，总间距 12px。 */
