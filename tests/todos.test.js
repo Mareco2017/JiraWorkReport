@@ -24,8 +24,9 @@ test('TODO full edit, statuses, comments and deletion retain the correct identit
  const {call}=await fixture(t);const group=(await call('todoGroupCreate',{name:'  product  '})).id;
  const created=await call('todoCreate',{title:'first',description:'a\nb',dueDate:'2028-02-29',priority:'高',groupId:group});const id=created.id;
  const first=created.state.todos[0];
- for(const status of ['进行中','已完成','待处理','已完成','进行中','待处理']) assert.equal((await call('todoSetStatus',{id,status})).state.todos[0].status,status);
- await call('todoSetStatus',{id,status:'已完成'});
+ for(const status of ['进行中','待处理','进行中','待处理']) assert.equal((await call('todoSetStatus',{id,status})).state.todos[0].status,status);
+ assert.equal((await call('todoComplete',{id})).state.todos[0].status,'已完成');
+ await assert.rejects(call('todoSetStatus',{id,status:'已完成'}),e=>e.code==='TODO_VALIDATION');
  const c1=(await call('todoCommentCreate',{todoId:id,content:'  line1\nline2  '})).id;const c2=(await call('todoCommentCreate',{todoId:id,content:'second'})).id;
  let result=await call('todoCommentUpdate',{todoId:id,id:c1,content:'changed'});assert.equal(result.state.todos[0].comments[0].edited,true);assert.equal(result.state.todos[0].comments[0].createdAt,first.createdAt);assert.equal(result.state.todos[0].comments[1].id,c2);assert.equal(result.state.todos[0].status,'已完成');
  result=await call('todoUpdate',{id,changes:{title:'new',description:'',dueDate:'',priority:'',groupId:'',status:'待处理',comments:[],createdAt:'spoof'}});
@@ -97,7 +98,7 @@ test('TODO entire successful lifecycle leaves workspaces and configuration byte-
  const id=(await call('todoCreate',{title:'local',groupId:a})).id;
  const comment=(await call('todoCommentCreate',{todoId:id,content:'comment'})).id;
  await call('todoUpdate',{id,changes:{groupId:b,title:'moved'}});await call('todoGroupRename',{id:a,name:'renamed'});await call('todoGroupReorder',{ids:[b,a]});
- await call('todoSetStatus',{id,status:'已完成'});await call('todoCommentUpdate',{todoId:id,id:comment,content:'edited'});await call('todoCommentDelete',{todoId:id,id:comment});
+ await call('todoComplete',{id});await call('todoCommentUpdate',{todoId:id,id:comment,content:'edited'});await call('todoCommentDelete',{todoId:id,id:comment});
  await call('todoGroupDelete',{id:b});await call('todoDelete',{id});await call('todoGroupDelete',{id:a});
  assert.deepEqual(await Promise.all(files.map(file=>readFile(file,'utf8'))),before);assert.deepEqual(await store.loadPersonalTodos(),{groups:[],todos:[]});
 });

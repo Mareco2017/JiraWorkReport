@@ -87,15 +87,22 @@ test('删除一笔：未登记直接删，已登记需 force',async t=>{
  assert.equal(state.todos[0].workLogs.length,0);
 });
 
-test('完成待办可顺手记一笔，也可不记；完成时间单独保存',async t=>{
- const f=await fixture(t);const a=await created(f,'带工时完成'),b=await created(f,'只完成');
- await f.todos.call('todoComplete',{id:a,workLog:entry(1.5)});
+test('完成待办原子完成父子任务且不自动记工时',async t=>{
+ const f=await fixture(t);const a=await created(f,'带子任务完成'),b=await created(f,'只完成');
+ await f.todos.call('todoSubtaskCreate',{todoId:a,title:'one'});
+ await f.todos.call('todoSubtaskCreate',{todoId:a,title:'two'});
+ await f.todos.call('todoComplete',{id:a});
  await f.todos.call('todoComplete',{id:b});
  const state=(await f.todos.call('todoLoad')).state;
  const first=state.todos.find(row=>row.id===a),second=state.todos.find(row=>row.id===b);
- assert.equal(first.status,'已完成');assert.equal(first.workLogs.length,1);assert.equal(first.workLogs[0].hours,1.5);
+ assert.equal(first.status,'已完成');assert.equal(first.workLogs,undefined);
+ assert.deepEqual(first.subtasks.map(row=>[row.title,row.done]),[['one',true],['two',true]]);
  assert.equal(second.status,'已完成');assert.equal(second.workLogs,undefined);
  assert.equal(first.completedAt,'2026-11-17T02:00:00.000Z');
+ await f.todos.call('todoAddWorkLog',{todoId:a,workLog:entry(1.5)});
+ const after=(await f.todos.call('todoLoad')).state.todos.find(row=>row.id===a);
+ assert.equal(after.status,'已完成');assert.equal(after.workLogs.length,1);assert.equal(after.workLogs[0].hours,1.5);
+ await assert.rejects(f.todos.call('todoSetStatus',{id:a,status:'已完成'}),e=>e.code==='TODO_VALIDATION');
 });
 
 test('新建待办可直接记录工时并设为已完成',async t=>{

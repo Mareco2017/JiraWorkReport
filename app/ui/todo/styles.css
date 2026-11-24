@@ -586,17 +586,11 @@
 }
 .todo-product .subtask-edit button { height:32px; padding:0 9px; font-size:11px; }
 
-.todo-product .completion-notice {
-  display:flex; gap:9px; align-items:flex-start;
-  padding:10px 11px; border:1px solid #f1deca; border-radius:6px;
-  background:#fff5eb; color:#9d5d34; font-size:11px; line-height:1.7;
+.todo-product .warning-icon {
+  display:grid; place-items:center; width:31px; height:31px;
+  border-radius:8px; color:#a76a2f; background:#fff5e9; flex:none;
 }
-.todo-product .completion-notice svg {
-  width:14px; height:14px; flex:none; margin-top:2px; stroke-width:1.9;
-}
-.todo-product .completion-notice strong {
-  display:block; margin-bottom:2px; font-size:12px; font-weight:600; color:#8a4f2c;
-}
-.todo-product .worklog-dialog .completion-notice { margin:0; }
+.todo-product .warning-icon svg { width:16px; height:16px; }
+.todo-product .completion-confirm .confirm-body { padding-top:12px; }
 
 /* 评论以标题下 8px 为基准；子任务/工时记录空状态再增加 4px，总间距 12px。 */

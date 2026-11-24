@@ -13,8 +13,7 @@ function parseCommand(command,payload) {
   return {...fields,status,workLog};
  }
  if(command==='todoLoad')return {};
- // 完成待办可以顺手记一笔（日期+工时），也可以不记。
- if(command==='todoComplete')return {id:todoText(data.id,'id',{required:true}),workLog:data.workLog==null?null:todoWorkLogEntry(data.workLog)};
+ if(command==='todoComplete')return {id:todoText(data.id,'id',{required:true})};
  if(command==='todoAddWorkLog')return {todoId:todoText(data.todoId,'todoId',{required:true}),workLog:todoWorkLogEntry(data.workLog)};
  if(command==='todoUpdateWorkLog')return {todoId:todoText(data.todoId,'todoId',{required:true}),entryId:todoText(data.entryId,'entryId',{required:true}),patch:todoWorkLogPatch(data.workLog)};
  if(command==='todoDeleteWorkLog')return {todoId:todoText(data.todoId,'todoId',{required:true}),entryId:todoText(data.entryId,'entryId',{required:true})};
@@ -30,7 +29,10 @@ function parseCommand(command,payload) {
  if(command!=='todoGroupCreate'&&command!=='todoCommentCreate')result.id=todoText(data.id,'id',{required:true});
  if(command.startsWith('todoComment'))result.todoId=todoText(data.todoId,'todoId',{required:true});
  if(command==='todoUpdate')result.changes=todoFields(data.changes);
- if(command==='todoSetStatus')result.status=todoChoice(data.status,todoStatuses,'status');
+ if(command==='todoSetStatus'){
+  result.status=todoChoice(data.status,todoStatuses,'status');
+  if(result.status==='已完成')throw todoValidation('请使用完成待办操作','status');
+ }
  if(command==='todoGroupCreate'||command==='todoGroupRename')result.name=todoText(data.name,'name',{required:true,trim:true});
  if(command==='todoCommentCreate'||command==='todoCommentUpdate')result.content=todoText(data.content,'content',{required:true,trim:true});
  return result;
@@ -98,14 +100,10 @@ export class PersonalTodoService {
    if(command==='todoDelete'){state.todos=state.todos.filter(row=>row.id!==todo.id);return;}
    if(command==='todoComplete'){
     todo.status='已完成';
-    if(data.workLog){
-     const entries=logs();
-     if(entries.length>=WORKLOG_MAX)throw todoValidation('单条待办的工时记录过多','workLogs');
-     const entry={id:this.id(),...data.workLog,state:'recorded',createdAt:stamp(),updatedAt:stamp()};
-     entries.push(entry);resultId=entry.id;
-    }else resultId=todo.id;
+    for(const subtask of todo.subtasks??[])subtask.done=true;
     // 首次完成时间单独保存；updatedAt 会被评论等修改刷新，不能当作工作日期。
     todo.completedAt??=stamp();
+    resultId=todo.id;
    }else if(command==='todoAddWorkLog'){
     const entries=logs();
     if(entries.length>=WORKLOG_MAX)throw todoValidation('单条待办的工时记录过多','workLogs');

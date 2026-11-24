@@ -433,8 +433,7 @@ function renderContent() {
     mark.addEventListener('keydown', event => { if (event.key === ' ' || event.key === 'Enter') event.stopPropagation(); });
     mark.addEventListener('change', async () => {
       const desired=mark.checked ? '已完成' : '待处理';mark.checked=todo.status==='已完成';
-      // 完成走工时对话框；取消或失败时勾选保持原样。
-      if(desired==='已完成'){openWorklogDialog(todo,{mode:'complete'});return;}
+      if(desired==='已完成'){requestComplete(todo);return;}
       await changeStatus(todo.id,desired,mark);
       mark.checked = data.todos.find(item => item.id === todo.id).status === '已完成';
     });
@@ -693,8 +692,9 @@ function renderDetail() {
   const statusField=element('div','detail-field'); const statusLabel=element('label','','状态'); statusLabel.htmlFor='detailStatus';
   const status=element('select'); status.id='detailStatus'; statuses.forEach(value=>{const option=element('option','',value); status.append(option);}); status.value=todo.status;
   status.addEventListener('change',()=>{
-    if(status.value==='已完成'){status.value=todo.status;openWorklogDialog(todo,{mode:'complete'});return;}
-    changeStatus(todo.id,status.value,status);
+    const next=status.value;status.value=todo.status;
+    if(next==='已完成'){requestComplete(todo);return;}
+    changeStatus(todo.id,next,status);
   }); statusField.append(statusLabel,status); enhanceSelect(status);
   const groupField=element('div','detail-field'); const groupLabel=element('label','','分组'); groupLabel.htmlFor='detailGroup';
   const group=element('select'); group.id='detailGroup'; populateGroups(group,todo.groupId); group.addEventListener('change',()=>moveGroup(todo.id,group)); groupField.append(groupLabel,group); enhanceSelect(group);
@@ -731,7 +731,7 @@ function renderDetail() {
       }else changeStatus(todo.id,'进行中');
       return;
     }
-    openWorklogDialog(todo,{mode:'complete'});
+    requestComplete(todo);
   });
   const edit = element('button'); edit.type = 'button'; edit.append(icon('edit'), document.createTextNode('编辑'));
   edit.addEventListener('click', () => openEditor(todo.id));
@@ -741,14 +741,53 @@ function renderDetail() {
   bar.append(complete, edit, comment); panel.append(bar);
 }
 
-// 完成与补填共用同一个对话框；只有保存成功才写状态，取消不改动任何数据。
-function openWorklogDialog(todo,{mode='add',entry=null}={}) {
+// 完成只改父/子状态；补填工时走独立对话框，取消不写任何数据。
+async function completeTodo(todo) {
+  if (!await send('todoComplete',{id:todo.id})) return false;
+  render();
+  showToast('已完成待办');
+  return true;
+}
+
+function openCompletionConfirm(todo,count) {
+  const dialog=element('dialog','confirm-dialog completion-confirm');
+  dialog.setAttribute('aria-labelledby','completionConfirmTitle');
+  dialog.setAttribute('aria-describedby','completionConfirmBody');
+  const header=element('header','confirm-heading');
+  const warning=element('span','warning-icon'); warning.append(icon('alert'));
+  const title=element('h2','','还有 '+count+' 个未完成子任务'); title.id='completionConfirmTitle';
+  header.append(warning,title);
+  const body=element('p','confirm-body','确认完成后，父待办和这 '+count+' 个子任务都会标记为“已完成”。你可以返回继续处理，或确认完成。');
+  body.id='completionConfirmBody';
+  const footer=element('footer','dialog-footer');
+  const cancel=element('button','','取消'); cancel.type='button';
+  const confirm=element('button','primary','确认完成'); confirm.type='button';
+  footer.append(cancel,confirm); dialog.append(header,body,footer);
+  const dismiss=()=>{dialog.close();dialog.remove();};
+  cancel.addEventListener('click',dismiss);
+  dialog.addEventListener('cancel',event=>{event.preventDefault();dismiss();});
+  confirm.addEventListener('click',async()=>{
+    dismiss();
+    await completeTodo(todo);
+  });
+  root.append(dialog);
+  dialog.showModal();
+  cancel.focus();
+}
+
+function requestComplete(todo) {
+  const unfinished=(todo.subtasks||[]).filter(item=>!item.done).length;
+  if (!unfinished) return completeTodo(todo);
+  openCompletionConfirm(todo,unfinished);
+}
+
+function openWorklogDialog(todo,{entry=null}={}) {
   const editing=Boolean(entry);
   const dialog=element('dialog','worklog-dialog');
   dialog.setAttribute('aria-labelledby','worklogDialogTitle');
   const header=element('div','dialog-header');
   const heading=element('div');
-  const title=element('h2',null,mode==='complete'?'完成待办':editing?'修改工时':'记录工时');
+  const title=element('h2',null,editing?'修改工时':'记录工时');
   title.id='worklogDialogTitle';
   heading.append(title);
   const close=element('button','worklog-close','×');
@@ -758,14 +797,6 @@ function openWorklogDialog(todo,{mode='add',entry=null}={}) {
   const form=element('form','worklog-form');form.noValidate=true;
   const body=element('div','worklog-body');
   body.append(element('p','worklog-target',todo.title));
-  const unfinished=(todo.subtasks||[]).filter(item=>!item.done).length;
-  if(mode==='complete'&&unfinished){
-   const notice=element('div','completion-notice');
-   const alert=element('span');alert.append(icon('alert'));
-   const copy=element('div');
-   copy.append(element('strong','','还有 '+unfinished+' 个未完成子任务'),document.createTextNode('完成后父待办会标记为“已完成”，这 '+unfinished+' 个子任务仍保持未完成。你可以返回继续处理，或仍然完成。'));
-   notice.append(alert,copy);body.append(notice);
-  }
 
   const today=localToday();
   let day=entry?.day||today;
@@ -807,28 +838,23 @@ function openWorklogDialog(todo,{mode='add',entry=null}={}) {
   };
   const cancel=element('button',null,'取消');cancel.type='button';
   cancel.addEventListener('click',dismiss);
-  const skip=element('button',null,'暂不填写，仅完成');skip.type='button';
-  if(mode==='complete')skip.addEventListener('click',async()=>{
-    if(await finish('todoComplete',{id:todo.id},skip))showToast('已标记完成，工时稍后可补');
-  });
-  const save=element('button','primary',mode==='complete'?'保存并完成':editing?'保存修改':'保存');save.type='submit';
+  const save=element('button','primary',editing?'保存修改':'保存');save.type='submit';
   form.addEventListener('submit',async event=>{
     event.preventDefault();
     const workLog={hours:hoursInput.value,day,description:description.value};
     if(!workLog.hours){setError(error,'请选择或填写工时');hoursInput.focus();return;}
-    const command=mode==='complete'?'todoComplete':editing?'todoUpdateWorkLog':'todoAddWorkLog';
-    const payload=mode==='complete'?{id:todo.id,workLog}:editing?{todoId:todo.id,entryId:entry.id,workLog}:{todoId:todo.id,workLog};
+    const command=editing?'todoUpdateWorkLog':'todoAddWorkLog';
+    const payload=editing?{todoId:todo.id,entryId:entry.id,workLog}:{todoId:todo.id,workLog};
     if(!await finish(command,payload,save))return;
-    showToast(mode==='complete'?'已完成并记录 '+workLog.hours+' h':editing?'工时已更新':'已记录 '+workLog.hours+' h');
+    showToast(editing?'工时已更新':'已记录 '+workLog.hours+' h');
   });
-  if(mode==='complete')footer.append(cancel,skip,save);else footer.append(cancel,save);
+  footer.append(cancel,save);
   form.append(body,footer);
   dialog.append(header,form);
   dialog.addEventListener('cancel',event=>{event.preventDefault();dismiss();});
   close.addEventListener('click',dismiss);
   root.append(dialog);
   dialog.showModal();
-  description.focus();
 }
 
 function renderWorkLogs(todo) {
@@ -839,7 +865,7 @@ function renderWorkLogs(todo) {
   if(logs.length)head.append(element('span','worklog-count',logs.length+' 笔'));
   const add=element('button','text-action worklog-add','＋ 记录工时');
   add.type='button';
-  add.addEventListener('click',()=>openWorklogDialog(todo,{mode:'add'}));
+  add.addEventListener('click',()=>openWorklogDialog(todo));
   head.append(add);section.append(head);
   if(!logs.length){section.append(element('p','worklog-empty','还没有工时记录，点击右上角「记录工时」添加第一笔。'));return section;}
   const list=element('ul','worklog-list');
@@ -858,7 +884,7 @@ function renderWorkLogRow(todo,entry) {
   const actions=element('span','worklog-actions');
   if(!submitted){
     const edit=element('button','text-action','修改');edit.type='button';
-    edit.addEventListener('click',()=>openWorklogDialog(todo,{mode:'edit',entry}));
+    edit.addEventListener('click',()=>openWorklogDialog(todo,{entry}));
     actions.append(edit);
   }
   const remove=element('button','text-action danger','删除');remove.type='button';

@@ -86,14 +86,8 @@ app.whenReady().then(async()=>{
   await wait("Boolean(document.querySelector('#confirmDialog[open]'))");
   await run("document.querySelector('#confirmDelete').click()");
   await wait("document.querySelectorAll('.subtask-item').length===2");
-  await run("document.querySelector('.detail-action-bar button').click()");
-  await wait("Boolean(document.querySelector('.worklog-dialog[open]'))");
-  assert.match(await run("document.querySelector('.completion-notice').textContent"),/还有 1 个未完成子任务/);
-  await run("document.querySelector('.worklog-dialog .dialog-footer button').click()");
-  await wait("!document.querySelector('.worklog-dialog[open]')");
-  assert.equal(await run("document.querySelector('#detailStatus').value"),'待处理');
-  assert.equal(await run("document.querySelectorAll('.subtask-item').length"),2);
-  await run("document.querySelector('.detail-action-bar button').click()");
+  // 先独立记录一笔工时；此时父待办仍未完成。
+  await run("document.querySelector('.worklog-add').click()");
   await wait("Boolean(document.querySelector('.worklog-dialog[open]'))");
   assert.equal(await run("document.querySelector('.worklog-dialog').getBoundingClientRect().width"),420);
   assert.deepEqual(await dateStyles('.worklog-dialog .date-row'),dailyDate,'日期按钮、快捷键和图标使用与工时填报一致的样式');
@@ -111,11 +105,82 @@ app.whenReady().then(async()=>{
   await wait("!document.querySelector('.date-popover') && Boolean(document.querySelector('.worklog-dialog[open]'))");
   if(process.argv[4])await fs.writeFile(path.join(directory,'worklog-dialog.png'),(await window.webContents.capturePage()).toPNG());
   await run("document.querySelector('.worklog-dialog button[type=submit]').click()");
-  await wait("document.querySelector('#detailStatus').value==='已完成'");
-  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 1/2');
-  assert.equal(await run("document.querySelectorAll('.subtask-item').length"),2);
-  assert.equal(await run("document.querySelector('.todo-table tbody tr .subtask-progress').textContent"),'已完成 1/2');
   await wait("document.querySelector('.worklog-description')?.textContent==='整理筛选条件'");
+  assert.equal(await run("document.querySelector('#detailStatus').value"),'待处理','记录工时不应改变父状态');
+  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 1/2');
+  assert.equal(await run("document.querySelectorAll('.worklog-item').length"),1);
+
+  // 详情按钮：有未完成子任务，先确认；取消不改变父/子状态。
+  await run("document.querySelector('.detail-action-bar button').click()");
+  await wait("Boolean(document.querySelector('.completion-confirm[open]'))");
+  assert.equal(await run("Boolean(document.querySelector('.worklog-dialog[open]'))"),false,'完成不应再打开工时弹窗');
+  assert.equal(await run("document.querySelectorAll('.completion-confirm .worklog-field').length"),0,'完成确认框不应含工时字段');
+  assert.match(await run("document.querySelector('#completionConfirmTitle').textContent"),/还有 1 个未完成子任务/);
+  assert.match(await run("document.querySelector('#completionConfirmBody').textContent"),/这 1 个子任务都会标记为“已完成”/);
+  await run("document.querySelector('.completion-confirm .dialog-footer button').click()");
+  await wait("!document.querySelector('.completion-confirm[open]')");
+  assert.equal(await run("document.querySelector('#detailStatus').value"),'待处理');
+  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 1/2');
+  assert.equal(await run("document.querySelectorAll('.worklog-item').length"),1);
+  await run("document.querySelector('.detail-action-bar button').click()");
+  await wait("Boolean(document.querySelector('.completion-confirm[open]'))");
+  await run("document.querySelector('.completion-confirm .primary').click()");
+  await wait("document.querySelector('#detailStatus').value==='已完成'");
+  assert.equal(await run("Boolean(document.querySelector('.worklog-dialog[open]'))"),false);
+  assert.equal(await run("Boolean(document.querySelector('.completion-confirm[open]'))"),false);
+  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 2/2','确认完成应完成所有子任务');
+  assert.equal(await run("document.querySelectorAll('.subtask-item').length"),2);
+  assert.equal(await run("document.querySelector('.todo-table tbody tr .subtask-progress').textContent"),'已完成 2/2');
+  assert.equal(await run("document.querySelectorAll('.worklog-item').length"),1,'完成不应自动新增工时');
+
+  // 状态下拉：先重开并取消一条子任务，制造未完成；取消确认保留进行中。
+  await run("document.querySelector('#detailStatus').value='进行中';document.querySelector('#detailStatus').dispatchEvent(new Event('change'))");
+  await wait("document.querySelector('#detailStatus').value==='进行中'");
+  await run("document.querySelectorAll('.subtask-checkbox')[0].click()");
+  await wait("document.querySelector('.subtask-count').textContent==='已完成 1/2'");
+  await run("document.querySelector('#detailStatus').value='已完成';document.querySelector('#detailStatus').dispatchEvent(new Event('change'))");
+  await wait("Boolean(document.querySelector('.completion-confirm[open]'))");
+  await run("document.querySelector('.completion-confirm .dialog-footer button').click()");
+  await wait("!document.querySelector('.completion-confirm[open]')");
+  assert.equal(await run("document.querySelector('#detailStatus').value"),'进行中');
+  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 1/2');
+  await run("document.querySelector('#detailStatus').value='已完成';document.querySelector('#detailStatus').dispatchEvent(new Event('change'))");
+  await wait("Boolean(document.querySelector('.completion-confirm[open]'))");
+  await run("document.querySelector('.completion-confirm .primary').click()");
+  await wait("document.querySelector('#detailStatus').value==='已完成'");
+  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 2/2');
+
+  // 列表复选框：先重开并取消一条子任务，再通过列表完成；取消后勾选保持未完成。
+  await run("document.querySelector('#detailStatus').value='进行中';document.querySelector('#detailStatus').dispatchEvent(new Event('change'))");
+  await wait("document.querySelector('#detailStatus').value==='进行中'");
+  await run("document.querySelectorAll('.subtask-checkbox')[0].click()");
+  await wait("document.querySelector('.subtask-count').textContent==='已完成 1/2'");
+  await run("document.querySelector('#closeDrawer').click()");
+  await wait("document.querySelector('#detailDrawer').hidden===true");
+  await wait("document.querySelector('tr[data-todo-id] .todo-checkbox').checked===false");
+  await run("document.querySelector('tr[data-todo-id] .todo-checkbox').click()");
+  await wait("Boolean(document.querySelector('.completion-confirm[open]'))");
+  await run("document.querySelector('.completion-confirm .dialog-footer button').click()");
+  await wait("!document.querySelector('.completion-confirm[open]')");
+  assert.equal(await run("document.querySelector('tr[data-todo-id] .todo-checkbox').checked"),false);
+  await run("document.querySelector('tr[data-todo-id] .todo-checkbox').click()");
+  await wait("Boolean(document.querySelector('.completion-confirm[open]'))");
+  await run("document.querySelector('.completion-confirm .primary').click()");
+  await wait("document.querySelector('tr[data-todo-id] .todo-checkbox').checked===true");
+  await run("document.querySelector('tr[data-todo-id]').click()");
+  await wait("document.querySelector('#detailTitle')?.textContent==='真实保存与重开'");
+  assert.equal(await run("document.querySelector('#detailStatus').value"),'已完成');
+  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 2/2');
+
+  // 无未完成子任务：详情按钮直接完成，不再确认。
+  await run("document.querySelector('#detailStatus').value='进行中';document.querySelector('#detailStatus').dispatchEvent(new Event('change'))");
+  await wait("document.querySelector('#detailStatus').value==='进行中'");
+  await run("document.querySelector('.detail-action-bar button').click()");
+  await wait("document.querySelector('#detailStatus').value==='已完成'");
+  assert.equal(await run("Boolean(document.querySelector('.completion-confirm[open]'))"),false);
+  assert.equal(await run("Boolean(document.querySelector('.worklog-dialog[open]'))"),false);
+
+  // 完成后编辑独立工时。
   await run("document.querySelector('.worklog-actions button').click()");
   assert.equal(await run("document.querySelector('#worklogDescription').value"),'整理筛选条件');
   await run("document.querySelector('#worklogDescription').value='补充验收说明';document.querySelector('.worklog-dialog button[type=submit]').click()");
@@ -156,19 +221,19 @@ app.whenReady().then(async()=>{
  assert.equal(await run("document.querySelector('.group-footnote')===null"),true);
  const state=JSON.parse(await fs.readFile(path.join(directory,'personal-todos.json'),'utf8'));
  assert.equal(state.todos.length,1);assert.equal(state.todos[0].title,'真实保存与重开');assert.equal(state.todos[0].status,'已完成');assert.equal(state.todos[0].comments[0].content,'真实评论');assert.equal(state.todos[0].description,'失败后重试的说明');
-  assert.equal(state.todos[0].workLogs[0].hours,.25,'完成对话框记录的工时应保存到待办');assert.equal(state.todos[0].workLogs[0].state,'recorded');assert.ok(state.todos[0].completedAt,'完成时间应单独保存');
+  assert.equal(state.todos[0].workLogs[0].hours,.25,'独立记录的工时应保存到待办');assert.equal(state.todos[0].workLogs[0].state,'recorded');assert.ok(state.todos[0].completedAt,'完成时间应单独保存');
   const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
   assert.equal(state.todos[0].workLogs[0].day,yesterday.toLocaleDateString('sv-SE'));
   assert.equal(state.todos[0].workLogs[0].description,'补充验收说明');
   assert.equal(state.todos[0].subtasks.length,2);
-  assert.equal(state.todos[0].subtasks.filter(item=>item.done).length,1);
+  assert.equal(state.todos[0].subtasks.filter(item=>item.done).length,2);
   assert.equal(state.todos[0].subtasks[1].title,'汇总遗留问题（更新）');
  if(phase==='reopen'){
   await run("document.querySelector('#listView').click()");
   await wait("Boolean(document.querySelector('.todo-table tbody tr'))");
   await run("document.querySelector('.todo-table tbody tr').click()");
   await wait("document.querySelector('#detailTitle')?.textContent==='真实保存与重开'");
-  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 1/2');
+  assert.equal(await run("document.querySelector('.subtask-count').textContent"),'已完成 2/2');
   assert.equal(await run("document.querySelectorAll('.subtask-item').length"),2);
   await run("document.querySelector('#closeDrawer').click()");
  }
