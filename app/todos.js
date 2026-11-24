@@ -13,7 +13,10 @@ function parseCommand(command,payload) {
   return {...fields,status,workLog};
  }
  if(command==='todoLoad')return {};
- if(command==='todoComplete')return {id:todoText(data.id,'id',{required:true})};
+ if(command==='todoComplete'){
+  if(data.workLog!==undefined)throw todoValidation('完成待办不再记录工时，请使用记录工时','workLog');
+  return {id:todoText(data.id,'id',{required:true})};
+ }
  if(command==='todoAddWorkLog')return {todoId:todoText(data.todoId,'todoId',{required:true}),workLog:todoWorkLogEntry(data.workLog)};
  if(command==='todoUpdateWorkLog')return {todoId:todoText(data.todoId,'todoId',{required:true}),entryId:todoText(data.entryId,'entryId',{required:true}),patch:todoWorkLogPatch(data.workLog)};
  if(command==='todoDeleteWorkLog')return {todoId:todoText(data.todoId,'todoId',{required:true}),entryId:todoText(data.entryId,'entryId',{required:true})};
@@ -65,7 +68,6 @@ export class PersonalTodoService {
     const todo={id:resultId,...fields,createdAt:time,updatedAt:time,comments:[],subtasks:[]};
     if(workLog){
      todo.workLogs=[{id:this.id(),...workLog,state:'recorded',createdAt:time,updatedAt:time}];
-     todo.completedAt=time;
     }
     if(todo.status==='已完成')todo.completedAt??=time;
     state.todos.push(todo);return;
@@ -118,7 +120,6 @@ export class PersonalTodoService {
     Object.assign(todo,data.changes);resultId=todo.id;
    }else if(command==='todoSetStatus'){
     todo.status=data.status;
-    if(data.status==='已完成')todo.completedAt??=stamp();
     resultId=todo.id;
    }
    else if(command==='todoCommentCreate'){

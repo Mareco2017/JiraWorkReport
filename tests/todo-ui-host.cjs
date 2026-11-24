@@ -180,6 +180,35 @@ app.whenReady().then(async()=>{
   assert.equal(await run("Boolean(document.querySelector('.completion-confirm[open]'))"),false);
   assert.equal(await run("Boolean(document.querySelector('.worklog-dialog[open]'))"),false);
 
+  // 自定义状态下拉：有未完成子任务时确认框接管焦点；取消后状态不变。
+  await run("document.querySelector('#detailStatus').value='进行中';document.querySelector('#detailStatus').dispatchEvent(new Event('change'))");
+  await wait("document.querySelector('#detailStatus').value==='进行中'");
+  await run("document.querySelectorAll('.subtask-checkbox')[0].click()");
+  await wait("document.querySelector('.subtask-count').textContent==='已完成 1/2'");
+  await run("document.querySelector('#detailStatusTrigger').click()");
+  await wait("Boolean(document.querySelector('.query-menu'))");
+  await run("[...document.querySelectorAll('.query-menu button')].find(button=>button.textContent.includes('已完成')).click()");
+  await wait("Boolean(document.querySelector('.completion-confirm[open]'))");
+  assert.equal(await run("document.activeElement.id"),'completionCancel','确认框应接管状态菜单的焦点');
+  await run("document.querySelector('#completionCancel').click()");
+  await wait("!document.querySelector('.completion-confirm[open]')");
+  assert.equal(await run("document.querySelector('#detailStatus').value"),'进行中');
+  await run("document.querySelectorAll('.subtask-checkbox')[0].click()");
+  await wait("document.querySelector('.subtask-count').textContent==='已完成 2/2'");
+  await run("document.querySelector('.detail-action-bar button').click()");
+  await wait("document.querySelector('#detailStatus').value==='已完成'");
+
+  // 无未完成子任务：列表复选框直接完成，不出现确认框。
+  await run("document.querySelector('#detailStatus').value='进行中';document.querySelector('#detailStatus').dispatchEvent(new Event('change'))");
+  await wait("document.querySelector('#detailStatus').value==='进行中'");
+  await run("document.querySelector('#closeDrawer').click()");
+  await wait("document.querySelector('#detailDrawer').hidden===true");
+  await run("document.querySelector('tr[data-todo-id] .todo-checkbox').click()");
+  await wait("document.querySelector('tr[data-todo-id] .todo-checkbox').checked===true");
+  assert.equal(await run("Boolean(document.querySelector('.completion-confirm[open]'))"),false);
+  await run("document.querySelector('tr[data-todo-id]').click()");
+  await wait("document.querySelector('#detailTitle')?.textContent==='真实保存与重开'");
+
   // 完成后编辑独立工时。
   await run("document.querySelector('.worklog-actions button').click()");
   assert.equal(await run("document.querySelector('#worklogDescription').value"),'整理筛选条件');

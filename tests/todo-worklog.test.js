@@ -99,13 +99,20 @@ test('完成待办原子完成父子任务且不自动记工时',async t=>{
  assert.deepEqual(first.subtasks.map(row=>[row.title,row.done]),[['one',true],['two',true]]);
  assert.equal(second.status,'已完成');assert.equal(second.workLogs,undefined);
  assert.equal(first.completedAt,'2026-11-17T02:00:00.000Z');
+ const completedAt=first.completedAt;
+ await f.todos.call('todoSubtaskCreate',{todoId:a,title:'after'});
+ await f.todos.call('todoComplete',{id:a});
+ const repeated=(await f.todos.call('todoLoad')).state.todos.find(row=>row.id===a);
+ assert.equal(repeated.completedAt,completedAt,'重复完成保留首次完成时间');
+ assert.equal(repeated.subtasks.find(row=>row.title==='after').done,true,'重复完成也完成新增子任务');
  await f.todos.call('todoAddWorkLog',{todoId:a,workLog:entry(1.5)});
  const after=(await f.todos.call('todoLoad')).state.todos.find(row=>row.id===a);
  assert.equal(after.status,'已完成');assert.equal(after.workLogs.length,1);assert.equal(after.workLogs[0].hours,1.5);
  await assert.rejects(f.todos.call('todoSetStatus',{id:a,status:'已完成'}),e=>e.code==='TODO_VALIDATION');
+ await assert.rejects(f.todos.call('todoComplete',{id:a,workLog:entry(1)}),e=>e.code==='TODO_VALIDATION'&&e.field==='workLog');
 });
 
-test('新建待办可直接记录工时并设为已完成',async t=>{
+test('创建例外：新建待办可直接记录工时并设为已完成',async t=>{
  const f=await fixture(t);
  const created=await f.todos.call('todoCreate',{title:'新建即完成',status:'已完成',workLog:{hours:1.5,day:TODAY}});
  const todo=created.state.todos[0];
@@ -115,6 +122,13 @@ test('新建待办可直接记录工时并设为已完成',async t=>{
  assert.equal(todo.completedAt,'2026-11-17T02:00:00.000Z');
  await assert.rejects(f.todos.call('todoCreate',{title:'坏状态',status:'未知'}),e=>e.code==='TODO_VALIDATION');
  await assert.rejects(f.todos.call('todoCreate',{title:'坏工时',workLog:{hours:.1,day:TODAY}}),e=>e.code==='TODO_VALIDATION');
+});
+
+test('新建待处理待办带工时时不得写入完成时间',async t=>{
+ const f=await fixture(t);
+ const created=await f.todos.call('todoCreate',{title:'待处理带工时',workLog:{hours:1,day:TODAY}});
+ const todo=created.state.todos[0];
+ assert.equal(todo.status,'待处理');assert.equal(todo.workLogs.length,1);assert.equal(todo.completedAt,undefined);
 });
 
 test('旧单条 workLog 读取时丢弃，保存后不残留',async t=>{

@@ -280,7 +280,12 @@ function openQueryMenu(selectId, triggerId) {
     const check = element('span', 'check-slot');
     if (select.value === option.value) check.append(icon('check'));
     button.append(element('span', '', option.textContent), check);
-    button.addEventListener('click', () => { select.value = option.value; select.dispatchEvent(new Event('change')); closeQueryMenu(); trigger.focus(); });
+    button.addEventListener('click', () => {
+      select.value = option.value;
+      closeQueryMenu();
+      select.dispatchEvent(new Event('change'));
+      if (!document.querySelector('dialog[open]') && trigger.isConnected) trigger.focus();
+    });
     menu.append(button);
   });
   menu.addEventListener('keydown', event => {
@@ -760,8 +765,8 @@ function openCompletionConfirm(todo,count) {
   const body=element('p','confirm-body','确认完成后，父待办和这 '+count+' 个子任务都会标记为“已完成”。你可以返回继续处理，或确认完成。');
   body.id='completionConfirmBody';
   const footer=element('footer','dialog-footer');
-  const cancel=element('button','','取消'); cancel.type='button';
-  const confirm=element('button','primary','确认完成'); confirm.type='button';
+  const cancel=element('button','','取消'); cancel.type='button'; cancel.id='completionCancel';
+  const confirm=element('button','primary','确认完成'); confirm.type='button'; confirm.id='completionConfirm';
   footer.append(cancel,confirm); dialog.append(header,body,footer);
   const dismiss=()=>{dialog.close();dialog.remove();};
   cancel.addEventListener('click',dismiss);
@@ -855,6 +860,7 @@ function openWorklogDialog(todo,{entry=null}={}) {
   close.addEventListener('click',dismiss);
   root.append(dialog);
   dialog.showModal();
+  description.focus();
 }
 
 function renderWorkLogs(todo) {

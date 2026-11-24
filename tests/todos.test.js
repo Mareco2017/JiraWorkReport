@@ -77,6 +77,20 @@ test('TODO real I/O write failure keeps old bytes and the queue can retry',async
  finally {await chmod(root,0o700);}
  const result=await call('todoUpdate',{id,changes:{title:'new'}});assert.equal(result.state.todos[0].title,'new');assert.deepEqual(await readdir(root),['personal-todos.json']);
 });
+test('TODO completion write failure keeps parent and subtasks unchanged',async t=>{
+ const {call,file,root}=await fixture(t);const id=(await call('todoCreate',{title:'complete fail'})).id;
+ await call('todoSubtaskCreate',{todoId:id,title:'child'});
+ const before=await readFile(file,'utf8');
+ await chmod(root,0o500);
+ try{
+  await assert.rejects(call('todoComplete',{id}),e=>e.code==='TODO_SAVE_FAILED');
+  assert.equal(await readFile(file,'utf8'),before);
+  const state=JSON.parse(before);
+  assert.equal(state.todos[0].status,'待处理');assert.equal(state.todos[0].subtasks[0].done,false);
+ }finally{await chmod(root,0o700);}
+ const result=await call('todoComplete',{id});
+ assert.equal(result.state.todos[0].status,'已完成');assert.equal(result.state.todos[0].subtasks[0].done,true);
+});
 test('TODO simultaneous commands read current state within the existing file queue',async t=>{
  const {call,store}=await fixture(t);await Promise.all(Array.from({length:10},(_,i)=>call('todoCreate',{title:'item '+i})));
  assert.equal((await store.loadPersonalTodos()).todos.length,10);
