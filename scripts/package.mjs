@@ -10,7 +10,7 @@ const paths=await packager({
  electronZipDir:process.argv[4],dir:'.',name:'JIRA工时填报',platform,arch,out:'dist',overwrite:true,asar:true,
  // Finder and Windows require their native multi-size icon containers, derived from the same approved wordmark.
  icon:resolve('assets/branding',platform==='darwin'?'app-icon.icns':'app-icon.ico'),
- ignore:[/^\/docs(?:\/|$)/,/^\/tests(?:\/|$)/,/^\/dist(?:\/|$)/,/^\/scripts(?:\/|$)/]
+ ignore:[/^\/docs(?:\/|$)/,/^\/tests(?:\/|$)/,/^\/dist(?:\/|$)/,/^\/scripts(?:\/|$)/,/^\/app\/site-defaults\.local\.json$/]
 });
 for(const folder of paths){
  console.log(folder);
